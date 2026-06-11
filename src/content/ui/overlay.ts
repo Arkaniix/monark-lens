@@ -5,6 +5,7 @@
 
 import { injectStyles } from "./styles";
 import { verdictMeta } from "../../ui/verdict";
+import { icon } from "../../ui/icons";
 import { buildEstimateUrl } from "../../ui/deeplink";
 import { requestSnapshot } from "./snapshot-client";
 import type { ListingContext, SnapshotOutcome } from "./snapshot-client";
@@ -21,20 +22,20 @@ const MONARK_WEB_URL = "https://monark-market.fr"; // SYNC: src/lib/constants.ts
 
 /** 14 anomalies « Signaler » — codes + libellés VERBATIM dist v1 (showFlagSelector). */
 export const FLAG_OPTIONS: ReadonlyArray<{ type: string; icon: string; label: string }> = [
-  { type: "broken", icon: "⚠️", label: "Composant HS / pour pièces" },
-  { type: "bundle", icon: "🖥️", label: "PC complet / bundle" },
-  { type: "box_only", icon: "📦", label: "Boîte / emballage seul" },
-  { type: "trade", icon: "🔄", label: "Échange / troc" },
-  { type: "wanted", icon: "🔎", label: "Demande d'achat" },
-  { type: "mining", icon: "⛏️", label: "Ex-minage" },
-  { type: "accessory", icon: "🔧", label: "Accessoire uniquement" },
-  { type: "symbolic_price", icon: "💬", label: "Prix symbolique / à négocier" },
-  { type: "reserved", icon: "🔒", label: "Réservé / vendu" },
-  { type: "multiple", icon: "📦", label: "Lot / quantité multiple" },
-  { type: "rental", icon: "🏠", label: "Location" },
-  { type: "rma_refurb", icon: "🔄", label: "Reconditionné / RMA" },
-  { type: "professional", icon: "🏪", label: "Vendeur professionnel" },
-  { type: "other", icon: "❓", label: "Autre anomalie" },
+  { type: "broken", icon: "alert-triangle", label: "Composant HS / pour pièces" },
+  { type: "bundle", icon: "monitor", label: "PC complet / bundle" },
+  { type: "box_only", icon: "package", label: "Boîte / emballage seul" },
+  { type: "trade", icon: "repeat", label: "Échange / troc" },
+  { type: "wanted", icon: "search", label: "Demande d'achat" },
+  { type: "mining", icon: "zap", label: "Ex-minage" },
+  { type: "accessory", icon: "wrench", label: "Accessoire uniquement" },
+  { type: "symbolic_price", icon: "message-circle", label: "Prix symbolique / à négocier" },
+  { type: "reserved", icon: "lock", label: "Réservé / vendu" },
+  { type: "multiple", icon: "layers", label: "Lot / quantité multiple" },
+  { type: "rental", icon: "house", label: "Location" },
+  { type: "rma_refurb", icon: "rotate-ccw", label: "Reconditionné / RMA" },
+  { type: "professional", icon: "store", label: "Vendeur professionnel" },
+  { type: "other", icon: "circle-help", label: "Autre anomalie" },
 ];
 
 /** type → libellé (réutilise les 14 anomalies pour le bandeau consensus). */
@@ -68,7 +69,7 @@ export function consensusBadge(c: Pick<ConsensusResponse, "votes"> | null | unde
 
 export function consensusLineHtml(b: ConsensusBadge): string {
   const color = b.tone === "amber" ? "var(--amber)" : "var(--zinc-400)";
-  return `<div class="ml-consensus" style="color:${color}">⚠ ${b.n} signalement${b.n > 1 ? "s" : ""} : ${esc(b.labels)}</div>`;
+  return `<div class="ml-consensus" style="color:${color}">${icon("alert-triangle")} ${b.n} signalement${b.n > 1 ? "s" : ""} : ${esc(b.labels)}</div>`;
 }
 
 // ── état module (un seul overlay à la fois) ────────────────────────────────
@@ -102,7 +103,7 @@ function headerHtml(): string {
   return (
     `<div class="ml-head">` +
     `<span class="ml-brand"><span class="ml-brand-logo">◎</span> Monark Lens</span>` +
-    `<button class="ml-close" data-act="close" aria-label="Fermer">✕</button>` +
+    `<button class="ml-close" data-act="close" aria-label="Fermer">${icon("x")}</button>` +
     `</div>`
   );
 }
@@ -125,11 +126,11 @@ function footerHtml(creditsRemaining: number | null): string {
 function actionsHtml(): string {
   return (
     `<div class="ml-actions">` +
-    `<button class="ml-act ml-act-primary" data-act="estimate">📊 Estimation complète →</button>` +
+    `<button class="ml-act ml-act-primary" data-act="estimate">${icon("bar-chart")} Estimation complète →</button>` +
     `<div class="ml-act-row">` +
-    `<button class="ml-act" data-act="flag">🚩 Signaler</button>` +
-    `<button class="ml-act" data-act="alert">🔔 Alerte</button>` +
-    `<button class="ml-act" data-act="watch">☆ Watchlist</button>` +
+    `<button class="ml-act" data-act="flag">${icon("flag")} Signaler</button>` +
+    `<button class="ml-act" data-act="alert">${icon("bell")} Alerte</button>` +
+    `<button class="ml-act" data-act="watch">${icon("star")} Watchlist</button>` +
     `</div></div>`
   );
 }
@@ -148,7 +149,7 @@ function reliableBodyHtml(snap: SnapshotResponse): string {
   const verdictBadge = snap.verdict_label
     ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">` +
       `<span class="ml-verdict" style="color:${vm.color};background:color-mix(in srgb, ${vm.color} 14%, transparent)">` +
-      `${vm.icon ? vm.icon + " " : ""}${esc(snap.verdict_label)}</span>${gap}</div>`
+      `${esc(snap.verdict_label)}</span>${gap}</div>`
     : "";
 
   const cached = snap.cached
@@ -274,7 +275,7 @@ function renderFlagPanel(): string {
   const opts = FLAG_OPTIONS.map(
     (o) =>
       `<div class="ml-flag-opt" data-flag="${o.type}" data-label="${esc(o.label)}">` +
-      `<span class="ml-flag-ico">${o.icon}</span> ${esc(o.label)}</div>`,
+      `<span class="ml-flag-ico">${icon(o.icon)}</span> ${esc(o.label)}</div>`,
   ).join("");
   return (
     `<div class="ml-overlay">` +
@@ -289,7 +290,7 @@ function renderFlagPanel(): string {
 function renderAlertPanel(hasMedian: boolean): string {
   const threshold = hasMedian && snapRef?.market_median != null ? Math.round(snapRef.market_median * 0.85) : null;
   const below =
-    `<button class="ml-act" data-alert="price_below">📉 Prix sous seuil` +
+    `<button class="ml-act" data-alert="price_below">${icon("trending-down")} Prix sous seuil` +
     (threshold != null ? ` <span class="ml-num">(${threshold} €)</span>` : "") +
     `</button>`;
   return (
@@ -297,9 +298,9 @@ function renderAlertPanel(hasMedian: boolean): string {
     headerHtml() +
     `<div class="ml-flag-prompt">Quand veux-tu être alerté sur ce modèle ?</div>` +
     `<div class="ml-actions">` +
-    `<button class="ml-act" data-alert="deal_detected">🔥 Bonne affaire détectée</button>` +
+    `<button class="ml-act" data-alert="deal_detected">${icon("flame")} Bonne affaire détectée</button>` +
     below +
-    `<button class="ml-act" data-alert="new_listing">🆕 Nouveau signal</button>` +
+    `<button class="ml-act" data-alert="new_listing">${icon("sparkles")} Nouveau signal</button>` +
     `<button class="ml-act" data-act="back">← Retour au résultat</button>` +
     `</div></div>`
   );
@@ -395,7 +396,7 @@ async function onAlert(alertType: string): Promise<void> {
   if (alertType === "price_below" && snapRef?.market_median != null) {
     payload.price_threshold = Math.round(snapRef.market_median * 0.85);
   }
-  await sendTargetAction({ type: "CREATE_ALERT", payload }, "🔔 Alerte créée ✓");
+  await sendTargetAction({ type: "CREATE_ALERT", payload }, "Alerte créée ✓");
 }
 
 async function onWatchlist(): Promise<void> {
@@ -404,7 +405,7 @@ async function onWatchlist(): Promise<void> {
     type: "ADD_WATCHLIST",
     payload: { target_type: "model", target_id: ctxRef.componentId },
   };
-  await sendTargetAction(msg, "★ Ajouté ✓");
+  await sendTargetAction(msg, "Ajouté ✓");
 }
 
 /** Envoie une action alerte/watchlist et affiche un feedback inline sur le bouton. */
@@ -417,12 +418,12 @@ async function sendTargetAction(msg: CreateAlertMsg | AddWatchlistMsg, okLabel: 
     const res = (await send<{ error?: string; status?: number }>(msg)) || {};
     if (btn) {
       const dup = res.status === 409;
-      btn.textContent = res.error && !dup ? "✕ Échec" : dup ? "★ Déjà suivi" : okLabel;
+      btn.textContent = res.error && !dup ? "Échec" : dup ? "Déjà suivi" : okLabel;
       if (!res.error || dup) btn.classList.add("ml-act-ok");
       btn.setAttribute("aria-disabled", "true");
     }
   } catch {
-    if (btn) btn.textContent = "✕ Échec";
+    if (btn) btn.textContent = "Échec";
   }
 }
 

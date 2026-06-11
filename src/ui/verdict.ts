@@ -1,4 +1,4 @@
-// src/ui/verdict.ts — mapping verdict → couleur DA + icône (ÉTAPE 1.3).
+// src/ui/verdict.ts — mapping verdict → couleur DA (ÉTAPE 1.3 ; pill sans icône, cf. site).
 //
 // Slugs verdict du snapshot backend (vérifiés monark_api app/services/lens.py:71-75 +
 // market_stats.py a_eviter) :
@@ -17,19 +17,18 @@ export interface VerdictMeta {
   tone: VerdictTone;
   /** Variable CSS (définie dans src/ui/tokens.ts). */
   color: string;
-  icon: string;
 }
 
 const VERDICT_MAP: Record<string, VerdictMeta> = {
-  excellente_affaire: { tone: "good", color: "var(--green)", icon: "🔥" },
-  bonne_affaire: { tone: "good", color: "var(--green)", icon: "✅" },
-  prix_correct: { tone: "neutral", color: "var(--zinc-400)", icon: "➡️" },
-  au_dessus_marche: { tone: "warn", color: "var(--amber)", icon: "⚠️" },
-  trop_cher: { tone: "bad", color: "var(--red)", icon: "🚫" },
-  a_eviter: { tone: "bad", color: "var(--red)", icon: "🚫" },
+  excellente_affaire: { tone: "good", color: "var(--green)" },
+  bonne_affaire: { tone: "good", color: "var(--green)" },
+  prix_correct: { tone: "neutral", color: "var(--zinc-400)" },
+  au_dessus_marche: { tone: "warn", color: "var(--amber)" },
+  trop_cher: { tone: "bad", color: "var(--red)" },
+  a_eviter: { tone: "bad", color: "var(--red)" },
 };
 
-const NEUTRAL: VerdictMeta = { tone: "unknown", color: "var(--zinc-400)", icon: "" };
+const NEUTRAL: VerdictMeta = { tone: "unknown", color: "var(--zinc-400)" };
 
 export function verdictMeta(verdict: string | null | undefined): VerdictMeta {
   if (!verdict) return NEUTRAL;

@@ -117,7 +117,7 @@ describe("overlay — rendu honnête des 6 états", () => {
     expect(b?.n).toBe(5); // 3+2 ; sale EXCLU
     expect(b?.tone).toBe("amber");
     const html = consensusLineHtml(b!);
-    expect(html).toContain("⚠ 5 signalements");
+    expect(html).toContain("5 signalements");
     expect(html).toContain("Composant HS / pour pièces"); // broken = dominant
     expect(html).toContain("var(--amber)");
   });

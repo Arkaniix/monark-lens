@@ -21,6 +21,7 @@ const COMPONENT_CSS = `
   -webkit-font-smoothing: antialiased;
 }
 .ml-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.ml-ico { width: 14px; height: 14px; flex: none; }
 
 /* ── Bouton passif ───────────────────────────────────────────────────────── */
 .ml-btn {

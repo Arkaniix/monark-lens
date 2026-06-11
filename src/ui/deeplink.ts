@@ -9,7 +9,7 @@
 // GARDE-FOU PRIVACY/PRODUIT : on n'inclut JAMAIS le titre de l'annonce ni son URL —
 // `model` = nom générique CMS uniquement. (Cf. SnapshotResponse.component_name.)
 //
-// ⚠️ INVARIANT 0-IMPORT : module importé uniquement par le content (overlay) → inliné.
+// /!\ INVARIANT 0-IMPORT : module importé uniquement par le content (overlay) → inliné.
 // Ne PAS importer MONARK_WEB_URL depuis src/lib/constants.ts (chunk partagé interdit côté
 // content) ; on duplique la constante. SYNC: src/lib/constants.ts:MONARK_WEB_URL.
 const MONARK_WEB_URL = "https://monark-market.fr";
