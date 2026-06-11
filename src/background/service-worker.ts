@@ -338,17 +338,19 @@ async function broadcastAuthToSiteTabs(): Promise<void> {
   try {
     const t = await getStoredTokens();
     const { user_email } = await getState(["user_email"]);
-    const tabs = await chrome.tabs.query({});
+    // Query FILTRÉE par URL : autorisée par nos host_permissions monark-market.fr, donc SANS
+    // la permission "tabs" (on ne lit plus tab.url — le filtre renvoie déjà les bons onglets).
+    const tabs = await chrome.tabs.query({
+      url: ["https://monark-market.fr/*", "https://www.monark-market.fr/*"],
+    });
+    const msg: SyncTokensToSiteMsg = {
+      action: "SYNC_TOKENS_TO_SITE",
+      access_token: t.access_token,
+      refresh_token: t.refresh_token,
+      email: user_email ?? null,
+    };
     for (const tab of tabs) {
-      if (tab.id && tab.url?.includes("monark-market.fr")) {
-        const msg: SyncTokensToSiteMsg = {
-          action: "SYNC_TOKENS_TO_SITE",
-          access_token: t.access_token,
-          refresh_token: t.refresh_token,
-          email: user_email ?? null,
-        };
-        chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
-      }
+      if (tab.id) chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
     }
   } catch {
     /* aucun onglet site ouvert */
