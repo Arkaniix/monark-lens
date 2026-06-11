@@ -3,39 +3,61 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Monark Lens [DEV]</title>
+    <title>Monark Lens</title>
     <link rel="stylesheet" href="./popup.css" />
   </head>
   <body>
-    <header>
-      <span class="dev-badge">DEV</span>
-      <strong>Monark Lens</strong>
-      <span id="version" class="muted"></span>
+    <header class="head">
+      <span class="brand"><span class="brand-logo">◎</span> Monark Lens</span>
+      <span id="version" class="ver"></span>
     </header>
 
-    <section id="auth">
-      <div id="auth-status" class="status">…</div>
-      <form id="login-form" class="row">
+    <!-- Connecté -->
+    <section id="account" class="card" hidden>
+      <div class="acct-row">
+        <span id="acct-email" class="acct-email"></span>
+        <span id="acct-plan" class="pill"></span>
+      </div>
+      <div class="acct-credits">
+        <span class="k">Crédits</span><span id="acct-credits" class="num"></span>
+      </div>
+      <button id="logout" class="btn ghost" type="button">Déconnexion</button>
+    </section>
+
+    <!-- Déconnecté -->
+    <section id="login" class="card" hidden>
+      <div class="muted">Connecte-toi pour analyser et collecter.</div>
+      <form id="login-form" class="login-form">
         <input id="email" type="email" placeholder="email" autocomplete="username" />
         <input id="password" type="password" placeholder="mot de passe" autocomplete="current-password" />
-        <button type="submit">Connexion (dev)</button>
+        <button class="btn" type="submit">Connexion</button>
       </form>
-      <button id="logout" type="button" class="ghost">Déconnexion</button>
-      <div id="auth-error" class="error"></div>
+      <div id="login-error" class="error"></div>
     </section>
 
-    <hr />
-
-    <section id="snapshot">
-      <h3>Tester <code>/lens/snapshot</code></h3>
-      <p class="muted">URL = onglet actif → ad_hash (SW) → snapshot. Champs pré-remplis par la détection du content script (éditables).</p>
-      <div id="detected" class="status muted"></div>
-      <label>component_id <input id="component-id" type="number" min="1" value="3" /></label>
-      <label>asking_price <input id="asking-price" type="number" min="1" step="0.01" value="200" /></label>
-      <button id="run-snapshot" type="button">Tester sur l'onglet courant</button>
-      <div id="snapshot-meta" class="status"></div>
-      <pre id="snapshot-output"></pre>
+    <!-- Détection de l'onglet courant -->
+    <section class="card">
+      <div class="sec-label">Onglet courant</div>
+      <div id="detected" class="detected">…</div>
     </section>
+
+    <!-- Collecte passive -->
+    <section class="card">
+      <label class="toggle">
+        <span class="toggle-text">
+          <span class="toggle-title">Collecte passive</span>
+          <span class="toggle-sub">Gagne des crédits en parcourant les annonces</span>
+        </span>
+        <input id="auto-signal" type="checkbox" class="toggle-input" />
+        <span class="switch"></span>
+      </label>
+      <div class="session">
+        <div class="stat"><span id="sess-signals" class="num">0</span><span class="stat-k">signaux envoyés</span></div>
+        <div class="stat"><span id="sess-credits" class="num">+0</span><span class="stat-k">crédits gagnés</span></div>
+      </div>
+    </section>
+
+    <a id="open-web" class="weblink" target="_blank" rel="noopener">Ouvrir Monark →</a>
 
     <script type="module" src="./popup.js"></script>
   </body>
