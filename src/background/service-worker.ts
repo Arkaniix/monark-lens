@@ -209,11 +209,19 @@ async function sendSignal(msg: SendSignalMsg): Promise<SignalIngestResponse> {
     price: msg.price,
     ad_hash,
   };
+  if (msg.currency) body.currency = msg.currency;
   if (msg.condition) body.condition = msg.condition;
   if (msg.region) body.region = msg.region;
+  if (msg.title) body.title = msg.title;
   if (msg.listing_intent) body.listing_intent = msg.listing_intent;
+  if (msg.quantity !== undefined) body.quantity = msg.quantity;
+  if (msg.has_warranty !== undefined) body.has_warranty = msg.has_warranty;
+  if (msg.has_invoice !== undefined) body.has_invoice = msg.has_invoice;
+  if (msg.has_original_box !== undefined) body.has_original_box = msg.has_original_box;
+  if (msg.defects) body.defects = msg.defects;
   if (msg.is_bundle !== undefined) body.is_bundle = msg.is_bundle;
   if (msg.bundle_component_ids) body.bundle_component_ids = msg.bundle_component_ids;
+  if (msg.signal_type) body.signal_type = msg.signal_type;
   const res = await apiCall("/signals/ingest", { method: "POST", body: JSON.stringify(body) }, true);
   if (!res.ok) throw new Error(`Signal ingest failed (${res.status})`);
   return (await res.json()) as SignalIngestResponse;

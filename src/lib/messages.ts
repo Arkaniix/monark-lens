@@ -42,15 +42,23 @@ export interface GetSnapshotMsg {
 }
 export interface SendSignalMsg {
   type: "SEND_SIGNAL";
-  url: string; // hashée dans le SW -> ad_hash
+  url: string; // hashée dans le SW -> ad_hash ; aucune URL sur le réseau
   component_id: number;
   platform: string;
   price: number;
-  condition?: string;
-  region?: string;
+  currency?: string;
+  condition?: string | null;
+  region?: string | null;
+  title?: string;
   listing_intent?: string;
+  quantity?: number;
+  has_warranty?: boolean;
+  has_invoice?: boolean;
+  has_original_box?: boolean;
+  defects?: string[] | null;
   is_bundle?: boolean;
-  bundle_component_ids?: number[];
+  bundle_component_ids?: number[] | null;
+  signal_type?: string;
 }
 export interface GetComponentDbMsg {
   type: "GET_COMPONENT_DB";
@@ -61,10 +69,10 @@ export interface UpdateCreditsMsg {
 }
 export interface DetectionStatusMsg {
   type: "DETECTION_STATUS";
-  platform: string;
-  componentId: number;
-  componentName: string;
-  price: number;
+  platform: string | null;
+  componentId: number | null;
+  componentName: string | null;
+  price: number | null;
 }
 export interface SubmitFlagMsg {
   type: "SUBMIT_FLAG";

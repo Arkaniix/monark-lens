@@ -61,11 +61,19 @@ export interface SignalIngestRequest {
   platform: string;
   price: number;
   ad_hash: string;
+  currency?: string;
   condition?: string;
   region?: string;
+  title?: string;
   listing_intent?: string;
+  quantity?: number;
+  has_warranty?: boolean;
+  has_invoice?: boolean;
+  has_original_box?: boolean;
+  defects?: string[];
   is_bundle?: boolean;
   bundle_component_ids?: number[];
+  signal_type?: string;
 }
 
 export interface SignalIngestResponse {
