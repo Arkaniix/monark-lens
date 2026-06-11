@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "Monark Lens",
+  "version": "1.7.39",
+  "description": "Analyse instantan\u00e9e des prix hardware sur Leboncoin, eBay et Vinted",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "alarms",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://api.monark-market.fr/*",
+    "https://*.monark-market.fr/*",
+    "https://monark-market.fr/*",
+    "https://*.leboncoin.fr/*",
+    "https://*.ebay.fr/*",
+    "https://*.ebay.com/*",
+    "https://*.vinted.fr/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.leboncoin.fr/*",
+        "https://*.ebay.fr/*",
+        "https://*.ebay.com/*",
+        "https://*.vinted.fr/*",
+        "https://monark-market.fr/*",
+        "https://www.monark-market.fr/*"
+      ],
+      "js": [
+        "content/main.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "assets/icon-16.png",
+      "48": "assets/icon-48.png",
+      "128": "assets/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "assets/icon-16.png",
+    "48": "assets/icon-48.png",
+    "128": "assets/icon-128.png"
+  }
+}
