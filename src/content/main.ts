@@ -1,19 +1,19 @@
-// src/content/main.ts — content script v2 (V2-01 : bridge auth UNIQUEMENT).
-//
-// Invariant MV3 : script CLASSIQUE auto-suffisant -> AUCUN import de VALEUR (chunk partagé).
-// Seul `import type` est autorisé (élidé au build, 0 import émis). Le parsing d'annonces et
-// l'overlay sont reportés à V2-02 (non portés ici).
-//
-// Bridge auth site monark-market.fr ↔ extension. Clés site CONFIRMÉES (front
-// monark-foundations, src/lib/api/client.ts) : localStorage monark_access_token /
-// monark_refresh_token. Écarts v1 ASSUMÉS (voir commentaires E1/E3).
+// src/content/main.ts — content script v2. Deux rôles, chacun gardé :
+//   (A) BRIDGE AUTH sur monark-market.fr (V2-01, inchangé).
+//   (B) CERVEAU MARKETPLACE (V2-02) sur LBC/eBay/Vinted : detect → parse → match → classify →
+//       DETECTION_STATUS + collecte passive. AUCUNE UI marketplace (overlay/bouton = V2-03).
+// Invariant MV3 : script CLASSIQUE auto-suffisant → uniquement des modules content inlinés +
+// `import type` (élidés). Aucun import de valeur depuis lib/* (chunk partagé).
 
+import { analyze, resetCollectState } from "./collect";
+import { loadComponentDb } from "./detect";
 import type { SyncTokensToSiteMsg } from "../lib/messages";
 
-const EXTENSION_VERSION = "2.0.0"; // inliné : pas d'import de constants -> reste auto-suffisant
+const EXTENSION_VERSION = "2.0.0";
+
+// ── (A) Bridge auth site monark-market.fr ↔ extension ──────────────────────
 const SITE_ACCESS_KEY = "monark_access_token";
 const SITE_REFRESH_KEY = "monark_refresh_token";
-
 let lastKnownSiteToken: string | null = null;
 let syncInProgress = false;
 
@@ -59,12 +59,9 @@ function handleExtensionToSite(message: SyncTokensToSiteMsg): void {
   } else {
     localStorage.removeItem(SITE_ACCESS_KEY);
     localStorage.removeItem(SITE_REFRESH_KEY);
-    // Écart v1 (E1) : on NE purge PAS `mock_current_user` — clé morte côté front actuel.
     lastKnownSiteToken = null;
   }
-  // Écart v1 (E3) : on garde UNIQUEMENT le reload (seul mécanisme réellement consommé par
-  // le site). DROP du CustomEvent "monark-auth-sync" et du StorageEvent synthétique : aucun
-  // listener côté site (vérifié sur le repo monark-foundations).
+  // Écart v1 (E3) : write localStorage + reload seulement (drop CustomEvent + StorageEvent).
   window.location.reload();
 }
 
@@ -90,11 +87,8 @@ async function checkSiteAuthChanged(): Promise<void> {
 function initAuthSync(): void {
   if (!isSiteHost()) return;
   console.log("[Monark] Auth sync initialized on monark-market.fr");
-
-  // Ping de présence (E5). Non consommé par le site à ce jour ; le site l'écoutera plus
-  // tard pour détecter l'extension (CTA install). Conservé volontairement (1 ligne).
+  // Ping de présence (E5) — non consommé par le site à ce jour (futur CTA install).
   window.postMessage({ type: "MONARK_LENS_INSTALLED", version: EXTENSION_VERSION }, "*");
-
   void initialSync();
   chrome.runtime.onMessage.addListener((message: SyncTokensToSiteMsg, _sender, sendResponse) => {
     if (message.action === "SYNC_TOKENS_TO_SITE") {
@@ -107,4 +101,53 @@ function initAuthSync(): void {
   setInterval(() => void checkSiteAuthChanged(), 2000);
 }
 
-initAuthSync();
+// ── (B) Observation de navigation (SPA) ────────────────────────────────────
+let lastUrl = "";
+function observeNavigation(callback: () => void): void {
+  callback();
+  lastUrl = window.location.href;
+  const nav = (window as unknown as { navigation?: { addEventListener(t: string, cb: () => void): void } }).navigation;
+  if (nav) {
+    nav.addEventListener("navigatesuccess", () => {
+      if (window.location.href !== lastUrl) {
+        lastUrl = window.location.href;
+        callback();
+      }
+    });
+  } else {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const observer = new MutationObserver(() => {
+      if (window.location.href !== lastUrl) {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          lastUrl = window.location.href;
+          callback();
+        }, 300);
+      }
+    });
+    if (document.body) observer.observe(document.body, { childList: true, subtree: true });
+  }
+  window.addEventListener("popstate", () => {
+    if (window.location.href !== lastUrl) {
+      lastUrl = window.location.href;
+      callback();
+    }
+  });
+}
+
+// ── init ───────────────────────────────────────────────────────────────────
+let scheduledForUrl: string | null = null;
+
+function init(): void {
+  initAuthSync(); // (A) no-op hors monark-market.fr
+  void loadComponentDb(); // (B) cache de détection
+  observeNavigation(() => {
+    const currentUrl = window.location.href;
+    if (currentUrl === scheduledForUrl) return;
+    scheduledForUrl = currentUrl;
+    resetCollectState();
+    setTimeout(() => void analyze(), 800);
+  });
+}
+
+init();
