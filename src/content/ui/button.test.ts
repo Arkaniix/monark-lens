@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
 
-import { mountAnalyzeButton, removeAnalyzeButton, shouldShowAnalyzeButton } from "./button";
+import { mountAnalyzeButton, mountAnalyzePlaceholder, removeAnalyzeButton, shouldShowAnalyzeButton } from "./button";
 import type { ListingContext } from "./snapshot-client";
 
 describe("shouldShowAnalyzeButton — gate apparition V2-03", () => {
@@ -52,6 +52,7 @@ describe("mount / remove bouton passif", () => {
     askingPrice: 200,
     condition: "good",
     intentType: "sale",
+    publishedAt: null,
   };
 
   it("monte un host unique (idempotent) et le retire proprement", () => {
@@ -59,6 +60,17 @@ describe("mount / remove bouton passif", () => {
     expect(document.getElementById("monark-lens-button")).not.toBeNull();
     mountAnalyzeButton(ctx); // remonte sans dupliquer
     expect(document.querySelectorAll("#monark-lens-button").length).toBe(1);
+    removeAnalyzeButton();
+    expect(document.getElementById("monark-lens-button")).toBeNull();
+  });
+
+  it("(A3) placeholder spinner monté puis swappé en bouton dans le MÊME host", () => {
+    mountAnalyzePlaceholder();
+    const host = document.getElementById("monark-lens-button");
+    expect(host).not.toBeNull();
+    mountAnalyzeButton(ctx); // swap in-place : host réutilisé, pas de doublon
+    expect(document.querySelectorAll("#monark-lens-button").length).toBe(1);
+    expect(document.getElementById("monark-lens-button")).toBe(host);
     removeAnalyzeButton();
     expect(document.getElementById("monark-lens-button")).toBeNull();
   });

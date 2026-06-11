@@ -27,21 +27,25 @@ const COMPONENT_CSS = `
 .ml-btn {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 8px 12px;
-  background: var(--subcard);
-  color: var(--zinc-300);
+  background: var(--bg);              /* #0A0A0B plein — JAMAIS de fond clair sur page hôte claire (LBC) */
+  color: #E4E4E7;                     /* zinc clair, lisible sur le fond sombre du bouton */
+  border: 1px solid var(--divider);   /* définition discrète sur hôte clair comme sombre (eBay) */
   border-radius: var(--radius);
   cursor: pointer; user-select: none;
   font-size: 12.5px; font-weight: 500;
-  backdrop-filter: blur(8px);
   box-shadow: 0 2px 14px rgba(0,0,0,0.35);
-  transition: background var(--t-fast) var(--ease-expo),
+  transition: border-color var(--t-fast) var(--ease-expo),
+              box-shadow var(--t-fast) var(--ease-expo),
               transform var(--t-fast) var(--ease-expo),
               opacity var(--t-fast) var(--ease-expo);
   opacity: 0; transform: translateY(-4px);
 }
 .ml-btn.ml-in { opacity: 1; transform: translateY(0); }
-.ml-btn:hover { background: var(--subcard-hover); transform: translateY(-2px); }
+.ml-btn:hover { border-color: var(--blue); box-shadow: 0 2px 18px rgba(59,130,246,0.28); transform: translateY(-2px); }
 .ml-btn[aria-disabled="true"] { cursor: progress; }
+/* (A3) Placeholder de chargement : même pilule sombre, non interactif (pas de hover-lift). */
+.ml-btn-loading { cursor: default; }
+.ml-btn-loading:hover { border-color: var(--divider); box-shadow: 0 2px 14px rgba(0,0,0,0.35); transform: translateY(0); }
 .ml-btn-logo { color: var(--turquoise); font-size: 14px; line-height: 1; }
 .ml-btn-cost { color: var(--zinc-500); font-family: var(--font-mono); font-size: 11px; }
 .ml-spinner {
@@ -80,6 +84,11 @@ const COMPONENT_CSS = `
   transition: background var(--t-fast) var(--ease-expo), color var(--t-fast) var(--ease-expo);
 }
 .ml-close:hover { background: var(--card-hover); color: var(--zinc-300); }
+
+/* (A4) Solde crédits — toujours visible en header, sur TOUS les états (y c. erreurs). */
+.ml-head-right { display: inline-flex; align-items: center; gap: 8px; }
+.ml-head-credits { font-family: var(--font-mono); font-size: 11px; color: var(--zinc-400); padding: 2px 7px; border-radius: 6px; background: var(--subcard); box-shadow: inset 0 1px 0 0 var(--hairline); }
+.ml-head-credits:empty { display: none; }
 
 /* Rappel de contexte OBLIGATOIRE (garde-fou faux-match) : sur QUOI porte l'analyse. */
 .ml-context { position: relative; overflow: hidden; background: var(--card); border-radius: var(--radius-card); padding: 8px 10px; margin-bottom: 10px; box-shadow: inset 0 1px 0 0 var(--hairline); }
@@ -155,9 +164,8 @@ const COMPONENT_CSS = `
 .ml-flag-opt:hover { background: var(--subcard-hover); }
 .ml-flag-ico { width: 18px; text-align: center; }
 
-/* Footer */
-.ml-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--hairline); }
-.ml-footer-credits { font-family: var(--font-mono); font-size: 11px; color: var(--zinc-500); }
+/* Footer (A4 : crédits déplacés en header → footer = version seule) */
+.ml-footer { display: flex; align-items: center; justify-content: flex-end; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--hairline); }
 .ml-footer-ver { font-size: 10px; color: var(--zinc-500); }
 `;
 

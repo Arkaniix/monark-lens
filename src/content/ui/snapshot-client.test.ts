@@ -11,6 +11,7 @@ const ctx: ListingContext = {
   askingPrice: 200,
   condition: "good",
   intentType: "sale",
+  publishedAt: null,
 };
 
 type ChromeLike = { runtime: { sendMessage: (m: unknown) => Promise<unknown> } };

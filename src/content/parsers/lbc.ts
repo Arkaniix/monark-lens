@@ -5,6 +5,13 @@ import type { ParsedListing } from "../types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+/** LBC publie `first_publication_date` (« 2024-06-11 14:30:00 ») → tronque à YYYY-MM-DD. */
+function ymdFromLbc(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
 /** JSON-first : window.__NEXT_DATA__.props.pageProps.ad (garde staleness). Null = fallback DOM. */
 export function extractFromNextData(): ParsedListing | null {
   try {
@@ -45,6 +52,8 @@ export function extractFromNextData(): ParsedListing | null {
     const description = ad.body || null;
     const categoryId = ad.category_id ?? null;
     const categoryName = ad.category_name ?? null;
+    // first_publication_date = vraie date de publication (≠ index_date = ré-indexation/refresh).
+    const publishedAt = ymdFromLbc(ad.first_publication_date);
     return {
       title,
       price,
@@ -55,6 +64,7 @@ export function extractFromNextData(): ParsedListing | null {
       categoryId,
       categoryName,
       isPourPieces,
+      publishedAt,
     };
   } catch (err) {
     console.warn("[Monark] __NEXT_DATA__ extraction failed:", err);

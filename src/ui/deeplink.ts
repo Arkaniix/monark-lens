@@ -4,7 +4,10 @@
 //   component=<id> + model_name=<nom> + category=<…>.
 // Le site monark-foundations ne lit QUE `model` aujourd'hui (vérifié) → v2 émet
 //   model=<component_name CMS> + price + condition(slug v1) + platform + source=lens.
-// id & category DROPPÉS ; les autres params seront consommés après le brief Lovable.
+// LOT A6 : on REJOUTE `component=<id catalogue>` (le site le lira via un brief Lovable
+//   séparé ; param surnuméraire = sans effet côté site actuel) + `date=YYYY-MM-DD` quand
+//   le parser l'extrait (LBC uniquement aujourd'hui — cf. ParsedListing.publishedAt).
+//   `model_name` & `category` restent DROPPÉS (renommés/inutiles).
 //
 // GARDE-FOU PRIVACY/PRODUIT : on n'inclut JAMAIS le titre de l'annonce ni son URL —
 // `model` = nom générique CMS uniquement. (Cf. SnapshotResponse.component_name.)
@@ -28,14 +31,18 @@ export interface EstimateLinkArgs {
   askingPrice: number;
   condition?: string | null;
   platform?: string | null;
+  componentId?: number | null; // id catalogue (A6) — surnuméraire côté site aujourd'hui
+  publishedAt?: string | null; // YYYY-MM-DD (LBC uniquement) ; omis ailleurs (cf. Lot B)
 }
 
 export function buildEstimateUrl(args: EstimateLinkArgs): string {
   const params = new URLSearchParams();
   params.set("model", args.componentName ?? "");
+  if (args.componentId != null) params.set("component", String(args.componentId));
   params.set("price", String(Math.round(args.askingPrice)));
   if (args.condition) params.set("condition", CONDITION_TO_SLUG[args.condition] ?? args.condition);
   if (args.platform) params.set("platform", args.platform);
+  if (args.publishedAt) params.set("date", args.publishedAt);
   params.set("source", "lens");
   return `${MONARK_WEB_URL}/estimator?${params.toString()}`;
 }

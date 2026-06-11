@@ -31,6 +31,7 @@ export function extractFromVintedJsonLd(merged: Record<string, string>): ParsedL
         categoryId: null,
         categoryName: null,
         isPourPieces: false,
+        publishedAt: null, // Vinted : date de publication non extraite (cf. Lot B)
       };
     }
   } catch (err) {

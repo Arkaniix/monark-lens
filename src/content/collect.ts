@@ -1,10 +1,15 @@
 // src/content/collect.ts — orchestration v2 (SANS overlay) : detect → parse → match → classify
 // → DETECTION_STATUS (pré-remplit le popup) → collecte passive (gate intent.shouldSignal).
 // Garde stricte : ne fait RIEN hors page détail des 3 plateformes.
-import { detectPlatform, findVariantName, matchComponent } from "./detect";
+import { detectPlatform, findVariantName, isComponentDbLoaded, loadComponentDb, matchComponent } from "./detect";
 import { classifyIntent, extractDefects } from "./filters";
 import { extractListingData, isHardwareCategory } from "./parsers";
-import { mountAnalyzeButton, removeAnalyzeButton, shouldShowAnalyzeButton } from "./ui/button";
+import {
+  mountAnalyzeButton,
+  mountAnalyzePlaceholder,
+  removeAnalyzeButton,
+  shouldShowAnalyzeButton,
+} from "./ui/button";
 import { closeOverlay } from "./ui/overlay";
 import type { IntentResult, MatchResult, ParsedListing, Platform } from "./types";
 import type { ListingContext } from "./ui/snapshot-client";
@@ -75,8 +80,25 @@ async function analyzeInner(): Promise<void> {
     notifyDetectionStatus(detection.platform, null, null, null);
     return;
   }
-  const match = matchComponent(listing.title);
+  // (A3) Annonce avec prix → placeholder spinner immédiat, résolu en bouton réel ou retiré
+  // selon match/intent. Couvre la résolution match + le cold-fetch du component-DB (1re page).
+  if (listing.price !== null) mountAnalyzePlaceholder();
+
+  let match = matchComponent(listing.title);
+  if (!match && !isComponentDbLoaded()) {
+    // 1re page avant le chargement du cache de détection : attendre le DB puis re-matcher.
+    // Garde anti-contexte-périmé (comme button.ts onClick) : si l'utilisateur a navigué (SPA)
+    // pendant le fetch, on ABANDONNE — pas de bouton monté sur la mauvaise annonce (faux-match).
+    const navUrl = location.href;
+    await loadComponentDb();
+    if (location.href !== navUrl) {
+      removeAnalyzeButton(); // retire le placeholder orphelin de l'annonce précédente
+      return;
+    }
+    match = matchComponent(listing.title);
+  }
   if (!match || listing.price === null) {
+    removeAnalyzeButton(); // retire le placeholder si présent
     notifyDetectionStatus(detection.platform, null, null, listing.price);
     return;
   }
@@ -102,6 +124,7 @@ async function analyzeInner(): Promise<void> {
       askingPrice,
       condition: listing.condition,
       intentType: intent.type,
+      publishedAt: listing.publishedAt,
     };
     mountAnalyzeButton(ctx);
   } else {

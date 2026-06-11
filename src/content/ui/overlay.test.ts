@@ -13,6 +13,7 @@ const ctx: ListingContext = {
   askingPrice: 265,
   condition: "good",
   intentType: "sale",
+  publishedAt: null,
 };
 
 function frag(html: string): HTMLElement {

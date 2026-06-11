@@ -38,6 +38,24 @@ describe("LBC — JSON-first __NEXT_DATA__", () => {
     expect(listing?.location).toBe("bretagne"); // LBC_REGION_MAP
     expect(listing?.categoryId).toBe(15);
     expect(listing?.description).toBe("ma description");
+    expect(listing?.publishedAt).toBeNull(); // pas de first_publication_date dans cet ad
+  });
+
+  it("(A6) publishedAt = first_publication_date tronqué à YYYY-MM-DD", async () => {
+    const ad = {
+      list_id: 2812345678,
+      subject: "RTX 3060",
+      price: [300],
+      first_publication_date: "2026-06-11 14:30:00",
+    };
+    const script = document.createElement("script");
+    script.id = "__NEXT_DATA__";
+    script.type = "application/json";
+    script.textContent = JSON.stringify({ props: { pageProps: { ad } } });
+    document.body.appendChild(script);
+
+    const listing = await extractListingData("leboncoin");
+    expect(listing?.publishedAt).toBe("2026-06-11");
   });
 });
 
@@ -59,6 +77,7 @@ describe("Vinted — JSON-LD + condition via couche (SPOF patchable)", () => {
     expect(listing?.condition).toBe("like_new"); // condition DOM normalisée, routée par la couche
     expect(listing?.description).toBe("desc vinted");
     expect(listing?.location).toBeNull(); // non dispo Vinted
+    expect(listing?.publishedAt).toBeNull(); // Vinted : date non extraite (Lot B)
   });
 
   it("condition absente -> null (dégradé non-fatal), title/price OK", async () => {
@@ -84,5 +103,6 @@ describe("eBay — DOM via la couche + stratégies", () => {
     expect(listing?.title).toBe("Intel Core i5-12400F");
     expect(listing?.price).toBe(129.99);
     expect(listing?.condition).toBe("good"); // occasion -> good
+    expect(listing?.publishedAt).toBeNull(); // eBay : date non extraite (Lot B)
   });
 });

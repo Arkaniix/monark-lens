@@ -70,3 +70,28 @@ describe("buildEstimateUrl — deep-link V2-03 (model only, jamais titre/URL)", 
     expect(p.get("price")).toBe("100");
   });
 });
+
+describe("buildEstimateUrl — LOT A6 : component id + date LBC", () => {
+  it("émet component=<id catalogue> quand componentId fourni (model conservé en parallèle)", () => {
+    const p = params(buildEstimateUrl({ componentName: "RTX 3060", askingPrice: 200, componentId: 3 }));
+    expect(p.get("component")).toBe("3");
+    expect(p.get("model")).toBe("RTX 3060");
+  });
+
+  it("omet component quand componentId absent ou null", () => {
+    expect(params(buildEstimateUrl({ componentName: "x", askingPrice: 1 })).has("component")).toBe(false);
+    expect(params(buildEstimateUrl({ componentName: "x", askingPrice: 1, componentId: null })).has("component")).toBe(
+      false,
+    );
+  });
+
+  it("émet date=YYYY-MM-DD quand publishedAt fourni (LBC)", () => {
+    const p = params(buildEstimateUrl({ componentName: "x", askingPrice: 1, publishedAt: "2026-06-11" }));
+    expect(p.get("date")).toBe("2026-06-11");
+  });
+
+  it("omet date quand publishedAt absent/null (eBay/Vinted → Lot B)", () => {
+    expect(params(buildEstimateUrl({ componentName: "x", askingPrice: 1 })).has("date")).toBe(false);
+    expect(params(buildEstimateUrl({ componentName: "x", askingPrice: 1, publishedAt: null })).has("date")).toBe(false);
+  });
+});

@@ -14,6 +14,7 @@ export interface ListingContext {
   askingPrice: number;
   condition: string | null;
   intentType: string;
+  publishedAt: string | null; // date de publication (LBC uniquement) pour le deep-link estimateur
 }
 
 export type SnapshotOutcome =

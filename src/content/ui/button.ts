@@ -26,40 +26,58 @@ export function shouldShowAnalyzeButton(intentType: string, shouldOverlay: boole
 }
 
 let hostEl: HTMLElement | null = null;
+let shadow: ShadowRoot | null = null;
+let root: HTMLElement | null = null;
 let loading = false;
 
-/** Retire le bouton (navigation, ouverture overlay, page non éligible). */
+/** Retire le bouton/placeholder (navigation, ouverture overlay, page non éligible). */
 export function removeAnalyzeButton(): void {
   hostEl?.remove();
   hostEl = null;
+  shadow = null;
+  root = null;
   loading = false;
 }
 
-/** Monte le bouton passif pour une annonce éligible. Idempotent (remplace l'existant). */
-export function mountAnalyzeButton(ctx: ListingContext): void {
-  removeAnalyzeButton();
-
+/** Crée le host (shadow closed, top-right) + styles si absent. `isNew` = host fraîchement créé. */
+function ensureHost(): { root: HTMLElement; isNew: boolean } {
+  if (root) return { root, isNew: false };
   hostEl = document.createElement("div");
   hostEl.id = HOST_ID;
   hostEl.style.cssText = "position:fixed;top:80px;right:16px;z-index:2147483600;";
-  const shadow = hostEl.attachShadow({ mode: "closed" });
+  shadow = hostEl.attachShadow({ mode: "closed" });
   injectStyles(shadow);
-
-  const root = document.createElement("div");
+  root = document.createElement("div");
   root.className = "ml-root";
-  const btn = document.createElement("div");
-  btn.className = "ml-btn";
-  btn.setAttribute("role", "button");
-  btn.setAttribute("tabindex", "0");
-  btn.innerHTML =
-    `<span class="ml-btn-logo">◎</span><span class="ml-btn-label">Analyser</span>` +
-    `<span class="ml-btn-cost">· 1 cr</span>`;
-  root.appendChild(btn);
   shadow.appendChild(root);
   document.body.appendChild(hostEl);
+  return { root, isNew: true };
+}
 
-  // apparition ease-expo (laisser le frame de layout passer)
-  requestAnimationFrame(() => btn.classList.add("ml-in"));
+/**
+ * (A3) Placeholder spinner — injecté dès qu'une annonce avec prix est parsée, AVANT que
+ * match/intent ne soient résolus (couvre le cold-fetch du component-DB). Non interactif.
+ * Remplacé in-place par le bouton réel (mountAnalyzeButton) ou retiré (removeAnalyzeButton).
+ */
+export function mountAnalyzePlaceholder(): void {
+  const { root: r, isNew } = ensureHost();
+  // Swap depuis un host déjà visible → naître avec `ml-in` (pas de re-fade ; transition douce).
+  r.innerHTML =
+    `<div class="ml-btn ml-btn-loading${isNew ? "" : " ml-in"}" aria-busy="true">` +
+    `<span class="ml-btn-logo">◎</span><span class="ml-spinner"></span></div>`;
+  if (isNew) requestAnimationFrame(() => r.firstElementChild?.classList.add("ml-in"));
+}
+
+/** Monte le bouton passif pour une annonce éligible. Réutilise le host (swap depuis placeholder). */
+export function mountAnalyzeButton(ctx: ListingContext): void {
+  loading = false;
+  const { root: r, isNew } = ensureHost();
+  r.innerHTML =
+    `<div class="ml-btn${isNew ? "" : " ml-in"}" role="button" tabindex="0">` +
+    `<span class="ml-btn-logo">◎</span><span class="ml-btn-label">Analyser</span>` +
+    `<span class="ml-btn-cost">· 1 cr</span></div>`;
+  const btn = r.firstElementChild as HTMLElement;
+  if (isNew) requestAnimationFrame(() => btn.classList.add("ml-in"));
 
   const trigger = (): void => void onClick(ctx, btn);
   btn.addEventListener("click", trigger);

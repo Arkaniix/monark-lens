@@ -19,6 +19,7 @@ export interface ParsedListing {
   categoryId: number | null;
   categoryName: string | null;
   isPourPieces: boolean;
+  publishedAt: string | null; // date de publication YYYY-MM-DD (LBC uniquement ; null ailleurs)
 }
 
 export type MatchType = "exact_name" | "alias" | "gpu_regex";

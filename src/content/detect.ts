@@ -57,6 +57,10 @@ export function getComponentDb(): ComponentDbEntry[] {
   return componentDb;
 }
 
+export function isComponentDbLoaded(): boolean {
+  return dbLoaded && componentDb.length > 0;
+}
+
 export async function loadComponentDb(): Promise<void> {
   if (dbLoaded && componentDb.length > 0) return;
   try {

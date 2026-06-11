@@ -60,6 +60,7 @@ export async function extractListingData(platform: Platform): Promise<ParsedList
     categoryId,
     categoryName,
     isPourPieces,
+    publishedAt: null, // eBay / fallback DOM : date de publication non extraite (cf. Lot B)
   };
 }
 
