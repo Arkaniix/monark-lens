@@ -1,4 +1,4 @@
-// src/popup/popup.ts — popup RÉEL (V2-03, remplace le harnais [DEV]).
+// src/popup/popup.ts — popup RÉEL (V2-03, remplace l'ancien harnais de dev V2-01).
 // Le popup ne fait JAMAIS de fetch : tout passe par le service-worker (proxy strict).
 // Contenu : état connexion (email · plan · crédits) | login | détection onglet courant |
 // toggle collecte passive (auto_signal) | compteurs session | lien Ouvrir Monark.
