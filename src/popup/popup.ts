@@ -49,6 +49,31 @@ async function onLogout(): Promise<void> {
   await refreshAuth();
 }
 
+async function prefillFromDetection(): Promise<void> {
+  // Lit le dernier DETECTION_STATUS (current_*) écrit par le content script.
+  const s = (await chrome.storage.local.get([
+    "current_component_id",
+    "current_component_name",
+    "current_price",
+    "current_platform",
+  ])) as {
+    current_component_id?: number | null;
+    current_component_name?: string | null;
+    current_price?: number | null;
+    current_platform?: string | null;
+  };
+  const detected = el("detected");
+  if (s.current_component_id) {
+    el<HTMLInputElement>("component-id").value = String(s.current_component_id);
+    if (s.current_price != null) el<HTMLInputElement>("asking-price").value = String(s.current_price);
+    detected.textContent = `Détecté : ${s.current_component_name ?? "?"} (#${s.current_component_id}) — ${
+      s.current_price ?? "?"
+    }€ · ${s.current_platform ?? "?"}`;
+  } else {
+    detected.textContent = "Aucun composant détecté sur l'onglet courant (saisie manuelle).";
+  }
+}
+
 async function onRunSnapshot(): Promise<void> {
   const out = el<HTMLPreElement>("snapshot-output");
   const meta = el("snapshot-meta");
@@ -91,6 +116,7 @@ function init(): void {
   el("logout").addEventListener("click", () => void onLogout());
   el("run-snapshot").addEventListener("click", () => void onRunSnapshot());
   void refreshAuth();
+  void prefillFromDetection();
 }
 
 init();

@@ -28,7 +28,8 @@
 
     <section id="snapshot">
       <h3>Tester <code>/lens/snapshot</code></h3>
-      <p class="muted">URL = onglet actif → ad_hash (SW) → snapshot. component_id saisi à la main (pas de parsing en V2-01).</p>
+      <p class="muted">URL = onglet actif → ad_hash (SW) → snapshot. Champs pré-remplis par la détection du content script (éditables).</p>
+      <div id="detected" class="status muted"></div>
       <label>component_id <input id="component-id" type="number" min="1" value="3" /></label>
       <label>asking_price <input id="asking-price" type="number" min="1" step="0.01" value="200" /></label>
       <button id="run-snapshot" type="button">Tester sur l'onglet courant</button>
