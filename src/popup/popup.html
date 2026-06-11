@@ -3,11 +3,39 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Monark Lens</title>
+    <title>Monark Lens [DEV]</title>
     <link rel="stylesheet" href="./popup.css" />
   </head>
   <body>
-    <div id="app">Monark Lens</div>
+    <header>
+      <span class="dev-badge">DEV</span>
+      <strong>Monark Lens</strong>
+      <span id="version" class="muted"></span>
+    </header>
+
+    <section id="auth">
+      <div id="auth-status" class="status">…</div>
+      <form id="login-form" class="row">
+        <input id="email" type="email" placeholder="email" autocomplete="username" />
+        <input id="password" type="password" placeholder="mot de passe" autocomplete="current-password" />
+        <button type="submit">Connexion (dev)</button>
+      </form>
+      <button id="logout" type="button" class="ghost">Déconnexion</button>
+      <div id="auth-error" class="error"></div>
+    </section>
+
+    <hr />
+
+    <section id="snapshot">
+      <h3>Tester <code>/lens/snapshot</code></h3>
+      <p class="muted">URL = onglet actif → ad_hash (SW) → snapshot. component_id saisi à la main (pas de parsing en V2-01).</p>
+      <label>component_id <input id="component-id" type="number" min="1" value="3" /></label>
+      <label>asking_price <input id="asking-price" type="number" min="1" step="0.01" value="200" /></label>
+      <button id="run-snapshot" type="button">Tester sur l'onglet courant</button>
+      <div id="snapshot-meta" class="status"></div>
+      <pre id="snapshot-output"></pre>
+    </section>
+
     <script type="module" src="./popup.js"></script>
   </body>
 </html>
