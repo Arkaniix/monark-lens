@@ -40,7 +40,7 @@ const COMPONENT_CSS = `
   opacity: 0; transform: translateY(-4px);
 }
 .ml-btn.ml-in { opacity: 1; transform: translateY(0); }
-.ml-btn:hover { background: var(--subcard-hover); }
+.ml-btn:hover { background: var(--subcard-hover); transform: translateY(-2px); }
 .ml-btn[aria-disabled="true"] { cursor: progress; }
 .ml-btn-logo { color: var(--turquoise); font-size: 14px; line-height: 1; }
 .ml-btn-cost { color: var(--zinc-500); font-family: var(--font-mono); font-size: 11px; }
@@ -55,18 +55,23 @@ const COMPONENT_CSS = `
 /* Conteneur flottant : fond plein + halo discret pour la LISIBILITÉ sur page claire
    (LBC) comme sombre (eBay dark). Les cartes INTERNES restent sans bordure/ombre (DA). */
 .ml-overlay {
+  position: relative; overflow: hidden;
   width: 360px; max-width: calc(100vw - 24px);
   background: var(--bg);
   border-radius: 14px;
   padding: 14px 14px 10px;
   box-shadow: 0 10px 48px rgba(0,0,0,0.55);
-  outline: 1px solid rgba(255,255,255,0.06);
+  outline: 1px solid var(--divider);
   animation: ml-pop var(--t-slow) var(--ease-expo);
+}
+.ml-overlay::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle at top right, rgba(59,130,246,0.04), transparent 50%);
 }
 @keyframes ml-pop { from { opacity: 0; transform: translateY(-6px) scale(0.985); } to { opacity: 1; transform: none; } }
 
 .ml-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.ml-brand { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--zinc-500); }
+.ml-brand { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--zinc-500); }
 .ml-brand-logo { color: var(--turquoise); font-size: 13px; text-transform: none; }
 .ml-close {
   display: inline-flex; align-items: center; justify-content: center;
@@ -77,7 +82,7 @@ const COMPONENT_CSS = `
 .ml-close:hover { background: var(--card-hover); color: var(--zinc-300); }
 
 /* Rappel de contexte OBLIGATOIRE (garde-fou faux-match) : sur QUOI porte l'analyse. */
-.ml-context { background: var(--card); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 10px; }
+.ml-context { position: relative; overflow: hidden; background: var(--card); border-radius: var(--radius-card); padding: 8px 10px; margin-bottom: 10px; box-shadow: inset 0 1px 0 0 var(--hairline); }
 .ml-context-name { color: var(--zinc-100); font-weight: 500; font-size: 13px; word-break: break-word; }
 .ml-context-price { color: var(--zinc-400); font-size: 12px; margin-top: 2px; }
 .ml-context-price b { color: var(--zinc-300); }
@@ -91,11 +96,16 @@ const COMPONENT_CSS = `
 .ml-hero-value { font-family: var(--font-mono); font-size: 30px; font-weight: 500; color: var(--zinc-100); letter-spacing: -0.01em; }
 .ml-hero-label { color: var(--zinc-500); font-size: 11px; }
 
-.ml-verdict { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 8px; font-weight: 600; font-size: 12.5px; }
+.ml-verdict { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-family: var(--font-mono); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; animation: ml-verdict-pop 500ms var(--ease-expo) 80ms both; }
+@keyframes ml-verdict-pop { from { opacity: 0; transform: scale(0.9); } }
 .ml-gap { font-family: var(--font-mono); font-size: 12px; margin-left: 2px; }
 
 /* Cartes internes (DA : opacité, pas de bordure/ombre) */
-.ml-card { background: var(--card); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 8px; }
+.ml-card { position: relative; overflow: hidden; background: var(--card); border-radius: var(--radius-card); padding: 8px 10px; margin-bottom: 8px; box-shadow: inset 0 1px 0 0 var(--hairline); }
+.ml-card::before, .ml-context::before, .ml-note::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle at top right, rgba(59,130,246,0.04), transparent 50%);
+}
 .ml-line { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; font-size: 12.5px; }
 .ml-line + .ml-line { border-top: 1px solid var(--hairline); }
 .ml-line-k { color: var(--zinc-500); }
@@ -105,12 +115,12 @@ const COMPONENT_CSS = `
 .ml-trend-flat { color: var(--zinc-400); }
 
 /* Fourchette prix DEMANDÉS — visuellement DISTINCTE de la médiane vendue */
-.ml-range { background: var(--subcard); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 8px; }
-.ml-range-label { color: var(--zinc-500); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+.ml-range { background: var(--subcard); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 8px; box-shadow: inset 0 1px 0 0 var(--hairline); }
+.ml-range-label { font-family: var(--font-mono); color: var(--zinc-500); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
 .ml-range-val { font-family: var(--font-mono); color: var(--zinc-300); font-size: 14px; margin-top: 3px; }
 
 /* États dégradés / messages */
-.ml-note { background: var(--card); border-radius: var(--radius); padding: 10px; font-size: 12.5px; color: var(--zinc-400); margin-bottom: 8px; }
+.ml-note { position: relative; overflow: hidden; background: var(--card); border-radius: var(--radius-card); padding: 10px; font-size: 12.5px; color: var(--zinc-400); margin-bottom: 8px; box-shadow: inset 0 1px 0 0 var(--hairline); }
 .ml-note-title { color: var(--zinc-100); font-weight: 500; display: block; margin-bottom: 3px; }
 .ml-nodebit { display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 6px; background: rgba(16,185,129,0.12); color: var(--green); font-size: 11px; font-weight: 600; }
 .ml-cached { font-size: 11px; color: var(--zinc-500); margin: -2px 0 8px; }
@@ -126,9 +136,9 @@ const COMPONENT_CSS = `
   padding: 8px 10px; border-radius: var(--radius);
   background: var(--subcard); color: var(--zinc-300);
   cursor: pointer; font-size: 12.5px; font-weight: 500; font-family: var(--font-sans);
-  transition: background var(--t-fast) var(--ease-expo);
+  transition: background var(--t-fast) var(--ease-expo), transform var(--t-fast) var(--ease-expo);
 }
-.ml-act:hover { background: var(--subcard-hover); }
+.ml-act:hover { background: var(--subcard-hover); transform: translateY(-2px); }
 .ml-act-primary { background: rgba(59,130,246,0.14); color: #93c5fd; }
 .ml-act-primary:hover { background: rgba(59,130,246,0.2); }
 .ml-act[aria-disabled="true"] { opacity: 0.55; cursor: default; }

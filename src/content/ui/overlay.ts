@@ -148,7 +148,7 @@ function reliableBodyHtml(snap: SnapshotResponse): string {
 
   const verdictBadge = snap.verdict_label
     ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">` +
-      `<span class="ml-verdict" style="color:${vm.color};background:color-mix(in srgb, ${vm.color} 14%, transparent)">` +
+      `<span class="ml-verdict" style="color:${vm.color};border:1px solid color-mix(in srgb, ${vm.color} 33%, transparent);background:color-mix(in srgb, ${vm.color} 8%, transparent)">` +
       `${esc(snap.verdict_label)}</span>${gap}</div>`
     : "";
 

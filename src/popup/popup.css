@@ -72,7 +72,7 @@ body {
 .brand-logo { color: var(--turquoise); }
 .ver { color: var(--zinc-500); font-family: var(--font-mono); font-size: 11px; }
 
-.card { background: var(--card); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; }
+.card { background: var(--card); border-radius: var(--radius-card); padding: 10px 12px; margin-bottom: 8px; box-shadow: inset 0 1px 0 0 var(--hairline); }
 
 /* Compte */
 .acct-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -104,17 +104,19 @@ body {
 .login-form { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
 .login-form input {
   padding: 7px 9px;
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--input-border);
   border-radius: 8px;
-  background: var(--subcard);
+  background: var(--input-bg);
   color: var(--zinc-100);
   font-size: 13px;
+  transition: border-color var(--ease-expo) 220ms;
 }
+.login-form input:focus { outline: none; border-color: var(--input-border-active); }
 .login-form input::placeholder { color: var(--zinc-500); }
 .error { color: var(--red); font-size: 12px; min-height: 14px; }
 
 /* Détection */
-.sec-label { color: var(--zinc-500); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+.sec-label { font-family: var(--font-mono); color: var(--zinc-500); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
 .detected { color: var(--zinc-300); font-size: 13px; }
 .det-name { color: var(--zinc-100); font-weight: 500; word-break: break-word; }
 .det-meta { color: var(--zinc-400); font-size: 12px; margin-top: 2px; }
