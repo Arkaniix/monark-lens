@@ -138,4 +138,5 @@ export interface TargetRequest {
   target_type: "model" | "ad";
   target_id: number;
   alert_type?: string;
+  price_threshold?: number; // alerte price_below (= médiane vendue × 0.85), payload v1
 }

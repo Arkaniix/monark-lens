@@ -4,7 +4,10 @@
 import { detectPlatform, findVariantName, matchComponent } from "./detect";
 import { classifyIntent, extractDefects } from "./filters";
 import { extractListingData, isHardwareCategory } from "./parsers";
+import { mountAnalyzeButton, removeAnalyzeButton, shouldShowAnalyzeButton } from "./ui/button";
+import { closeOverlay } from "./ui/overlay";
 import type { IntentResult, MatchResult, ParsedListing, Platform } from "./types";
+import type { ListingContext } from "./ui/snapshot-client";
 import type { SendSignalMsg } from "../lib/messages";
 
 let signalSentForUrl: string | null = null;
@@ -13,6 +16,11 @@ let analyzing = false;
 /** Reset dédup + état (appelé à chaque navigation). */
 export function resetCollectState(): void {
   signalSentForUrl = null;
+  // (V2-03) table rase de l'UI à chaque navigation : ni bouton, ni overlay résiduel d'une
+  // annonce précédente (SPA). closeOverlay silencieux = pas de re-montage du bouton ici
+  // (analyze() le remontera s'il y a lieu).
+  removeAnalyzeButton();
+  closeOverlay({ silent: true });
 }
 
 function sleep(ms: number): Promise<void> {
@@ -72,14 +80,32 @@ async function analyzeInner(): Promise<void> {
     notifyDetectionStatus(detection.platform, null, null, listing.price);
     return;
   }
+  const askingPrice = listing.price; // narrowé en number par le guard ci-dessus
   match.variantName = findVariantName(match.componentId, listing.title);
-  // Pré-remplissage du popup harnais.
-  notifyDetectionStatus(detection.platform, match.componentId, match.componentName, listing.price);
+  // Pré-remplissage du popup (détection courante).
+  notifyDetectionStatus(detection.platform, match.componentId, match.componentName, askingPrice);
 
-  // Classification (porte de signal) + collecte passive.
-  const intent = classifyIntent(listing.title, listing.price, listing.description, match.category);
+  // Classification (porte de signal) + collecte passive — INCHANGÉ (V2-02).
+  const intent = classifyIntent(listing.title, askingPrice, listing.description, match.category);
   if (intent.shouldSignal) {
     await sendPassiveSignal(detection.platform, listing, match, intent);
+  }
+
+  // (V2-03) Bouton passif. Détail + composant déjà acquis ici ; on n'ajoute le bouton
+  // que si l'intent l'autorise (jamais bundle / wanted / test_spam). Seul ajout à la page.
+  if (shouldShowAnalyzeButton(intent.type, intent.shouldOverlay)) {
+    const ctx: ListingContext = {
+      platform: detection.platform,
+      url: listing.url,
+      componentId: match.componentId,
+      componentName: match.componentName,
+      askingPrice,
+      condition: listing.condition,
+      intentType: intent.type,
+    };
+    mountAnalyzeButton(ctx);
+  } else {
+    removeAnalyzeButton();
   }
 }
 

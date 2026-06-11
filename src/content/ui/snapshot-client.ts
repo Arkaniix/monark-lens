@@ -1,0 +1,45 @@
+// src/content/ui/snapshot-client.ts — appel GET_SNAPSHOT via le SW (proxy strict).
+// Le content ne fetch jamais : il envoie l'URL BRUTE en interne, le SW la hashe (ad_hash)
+// et débite/cache. Partagé par button.ts (1er clic) et overlay.ts (retry).
+
+import type { SnapshotResponse } from "../../lib/api-types";
+import type { GetSnapshotMsg } from "../../lib/messages";
+
+/** Contexte d'une annonce analysable (issu de collect.ts). */
+export interface ListingContext {
+  platform: string;
+  url: string;
+  componentId: number;
+  componentName: string | null;
+  askingPrice: number;
+  condition: string | null;
+  intentType: string;
+}
+
+export type SnapshotOutcome =
+  | { ok: true; data: SnapshotResponse }
+  | { ok: false; error: string; status?: number };
+
+/** Demande un snapshot au SW. Ne jette pas : renvoie un résultat discriminé. */
+export async function requestSnapshot(ctx: ListingContext): Promise<SnapshotOutcome> {
+  const msg: GetSnapshotMsg = {
+    type: "GET_SNAPSHOT",
+    url: ctx.url,
+    component_id: ctx.componentId,
+    asking_price: ctx.askingPrice,
+    platform: ctx.platform,
+    condition: ctx.condition,
+  };
+  try {
+    const res = (await chrome.runtime.sendMessage(msg)) as
+      | (SnapshotResponse & { error?: undefined })
+      | { error: string; status?: number };
+    if (res && "error" in res && res.error) {
+      const status = (res as { status?: number }).status;
+      return status === undefined ? { ok: false, error: res.error } : { ok: false, error: res.error, status };
+    }
+    return { ok: true, data: res as SnapshotResponse };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erreur réseau" };
+  }
+}
