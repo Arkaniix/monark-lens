@@ -197,7 +197,13 @@ async function getSnapshot(
   };
   if (condition) body["condition"] = condition;
   const res = await apiCall("/lens/snapshot", { method: "POST", body: JSON.stringify(body) }, true);
-  if (!res.ok) throw new Error(await detailError(res, `Snapshot failed (${res.status})`));
+  if (!res.ok) {
+    // On PROPAGE le status HTTP (comme postTarget) : l'overlay V2-03 distingue 402
+    // (crédits épuisés) / 401 (session) / réseau. Sans ça, l'état 402 serait mort.
+    const err = new Error(await detailError(res, `Snapshot failed (${res.status})`)) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
   return (await res.json()) as SnapshotResponse;
 }
 
@@ -440,9 +446,15 @@ async function handleMessage(msg: WorkerMessage): Promise<unknown> {
       return getStoredTokens();
 
     case "GET_SNAPSHOT": {
-      const result = await getSnapshot(msg.url, msg.component_id, msg.asking_price, msg.platform, msg.condition ?? null);
-      await setState({ credits_remaining: result.credits_remaining });
-      return result;
+      try {
+        const result = await getSnapshot(msg.url, msg.component_id, msg.asking_price, msg.platform, msg.condition ?? null);
+        await setState({ credits_remaining: result.credits_remaining });
+        return result;
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        const error = err instanceof Error ? err.message : String(err);
+        return status === undefined ? { error } : { error, status };
+      }
     }
 
     case "SEND_SIGNAL": {
