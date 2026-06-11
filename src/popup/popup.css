@@ -1,27 +1,44 @@
 /* src/popup/popup.css — DA Monark (popup réel V2-03). Fichier STATIQUE (copié verbatim,
    non bundlé) → les tokens y sont écrits À LA MAIN.
-   ⚠️ SYNC OBLIGATOIRE : ce bloc :root DUPLIQUE src/ui/tokens.ts (que le content injecte
-   en shadow). Toute modif ici doit être répliquée dans src/ui/tokens.ts, et inversement. */
+   /!\ SYNC OBLIGATOIRE (gate de build : scripts/check-token-sync.mjs) : ce bloc :root
+   DUPLIQUE src/ui/tokens.ts (que le content injecte en shadow). Toute modif ici doit être
+   répliquée dans src/ui/tokens.ts, et inversement. */
 :root {
-  --bg: #0A0A0B;
-  --zinc-100: #f4f4f5;
+  --bg: #0a0a0b;
+
+  --zinc-100: #fafafa;
   --zinc-300: #d4d4d8;
   --zinc-400: #a1a1aa;
   --zinc-500: #71717a;
+
   --card: rgba(255, 255, 255, 0.012);
-  --subcard: rgba(255, 255, 255, 0.015);
-  --card-hover: rgba(255, 255, 255, 0.022);
+  --subcard: rgba(255, 255, 255, 0.02);
+  --card-hover: rgba(255, 255, 255, 0.025);
+  --subcard-hover: rgba(255, 255, 255, 0.025);
   --hairline: rgba(255, 255, 255, 0.04);
+  --divider: rgba(255, 255, 255, 0.06);
   --radius: 10px;
+  --radius-card: 12px;
+
   --blue: #3b82f6;
+  --blue-soft: #93c5fd;
   --green: #10b981;
   --amber: #f59e0b;
   --red: #ef4444;
   --turquoise: #09b1ba;
-  --violet: #a855f7;
+  --violet: #8b5cf6;
+
   --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-fast: 220ms;
+  --t-slow: 400ms;
+
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --input-bg: #09090b;
+  --input-border: rgba(255, 255, 255, 0.08);
+  --input-border-active: rgba(255, 255, 255, 0.30);
+
   color-scheme: dark;
 }
 
@@ -30,6 +47,7 @@
 @font-face { font-family: "JetBrains Mono"; font-weight: 400; font-display: swap; src: url("../assets/fonts/jetbrains-mono-regular.woff2") format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-weight: 500; font-display: swap; src: url("../assets/fonts/jetbrains-mono-medium.woff2") format("woff2"); }
 @font-face { font-family: "Inter"; font-weight: 400; font-display: swap; src: url("../assets/fonts/inter-regular.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 500; font-display: swap; src: url("../assets/fonts/inter-medium.woff2") format("woff2"); }
 @font-face { font-family: "Inter"; font-weight: 600; font-display: swap; src: url("../assets/fonts/inter-semibold.woff2") format("woff2"); }
 
 * { box-sizing: border-box; }

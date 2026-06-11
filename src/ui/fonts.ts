@@ -16,6 +16,7 @@ const FONT_FILES = [
   { family: "JetBrains Mono", weight: 400, file: "jetbrains-mono-regular.woff2" },
   { family: "JetBrains Mono", weight: 500, file: "jetbrains-mono-medium.woff2" },
   { family: "Inter", weight: 400, file: "inter-regular.woff2" },
+  { family: "Inter", weight: 500, file: "inter-medium.woff2" },
   { family: "Inter", weight: 600, file: "inter-semibold.woff2" },
 ] as const;
 
