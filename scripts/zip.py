@@ -4,7 +4,10 @@ import json
 import os
 import zipfile
 
-with open("dist/manifest.json", encoding="utf-8") as f:
+# Le nom du zip porte le label de dev (package.json), pas la version du manifest :
+# le manifest doit rester une version Chrome valide (numérique, ex "2.0.0"), alors que
+# le package versionne les itérations dev ("2.0.0-dev.1").
+with open("package.json", encoding="utf-8") as f:
     version = json.load(f)["version"]
 
 output = f"monark-lens-v{version}.zip"
