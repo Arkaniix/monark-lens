@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 
-import { FLAG_OPTIONS, renderMain } from "./overlay";
+import { consensusBadge, consensusLineHtml, FLAG_OPTIONS, renderMain } from "./overlay";
 import type { ListingContext, SnapshotOutcome } from "./snapshot-client";
 import type { SnapshotResponse } from "../../lib/api-types";
 
@@ -109,6 +109,46 @@ describe("overlay — rendu honnête des 6 états", () => {
       expect(el.querySelector('[data-act="login"]')).not.toBeNull();
       expect(el.querySelector('[data-act="retry"]')).toBeNull();
     }
+  });
+
+  it("consensus présent ≥2 (hors sale) → ambre + N + libellés dominants", () => {
+    const b = consensusBadge({ votes: { broken: 3, mining: 2, sale: 5 } });
+    expect(b).not.toBeNull();
+    expect(b?.n).toBe(5); // 3+2 ; sale EXCLU
+    expect(b?.tone).toBe("amber");
+    const html = consensusLineHtml(b!);
+    expect(html).toContain("⚠ 5 signalements");
+    expect(html).toContain("Composant HS / pour pièces"); // broken = dominant
+    expect(html).toContain("var(--amber)");
+  });
+
+  it("consensus =1 → zinc, singulier", () => {
+    const b = consensusBadge({ votes: { wanted: 1 } });
+    expect(b?.n).toBe(1);
+    expect(b?.tone).toBe("zinc");
+    const html = consensusLineHtml(b!);
+    expect(html).toContain("1 signalement :");
+    expect(html).not.toContain("signalements");
+    expect(html).toContain("var(--zinc-400)");
+  });
+
+  it("anomalies fondues → « Autre anomalie » (bucket other)", () => {
+    expect(consensusLineHtml(consensusBadge({ votes: { other: 2 } })!)).toContain("Autre anomalie");
+  });
+
+  it("seuls des votes sale → AUCUN bandeau ; votes null/absent/erreur → AUCUN bandeau", () => {
+    expect(consensusBadge({ votes: { sale: 9 } })).toBeNull();
+    expect(consensusBadge({ votes: null })).toBeNull();
+    expect(consensusBadge(null)).toBeNull();
+    expect(consensusBadge(undefined)).toBeNull();
+  });
+
+  it("snapshot INDÉPENDANT du consensus : slot vide par défaut, snapshot rendu quand même", () => {
+    const el = frag(renderMain(ctx, ok(snap({}))));
+    const slot = el.querySelector(".ml-consensus-slot");
+    expect(slot).not.toBeNull();
+    expect(slot?.textContent).toBe(""); // vide tant que le consensus n'a pas répondu
+    expect(el.querySelector(".ml-hero-value")).not.toBeNull();
   });
 
   it("expose les 14 anomalies exactes (verbatim v1)", () => {

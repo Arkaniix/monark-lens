@@ -81,6 +81,10 @@ const COMPONENT_CSS = `
 .ml-context-price { color: var(--zinc-400); font-size: 12px; margin-top: 2px; }
 .ml-context-price b { color: var(--zinc-300); }
 
+/* Consensus communauté — ligne discrète, injectée en async (best-effort, jamais bloquant) */
+.ml-consensus-slot:empty { display: none; }
+.ml-consensus { font-size: 11.5px; line-height: 1.4; margin: -4px 0 8px; }
+
 /* Héros médiane vendue */
 .ml-hero { display: flex; align-items: baseline; gap: 8px; margin: 2px 0 8px; }
 .ml-hero-value { font-family: var(--font-mono); font-size: 30px; font-weight: 500; color: var(--zinc-100); letter-spacing: -0.01em; }

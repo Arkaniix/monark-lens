@@ -8,10 +8,11 @@ import { verdictMeta } from "../../ui/verdict";
 import { buildEstimateUrl } from "../../ui/deeplink";
 import { requestSnapshot } from "./snapshot-client";
 import type { ListingContext, SnapshotOutcome } from "./snapshot-client";
-import type { SnapshotResponse } from "../../lib/api-types";
+import type { ConsensusResponse, SnapshotResponse } from "../../lib/api-types";
 import type {
   AddWatchlistMsg,
   CreateAlertMsg,
+  GetConsensusMsg,
   SubmitFlagMsg,
 } from "../../lib/messages";
 
@@ -36,6 +37,40 @@ export const FLAG_OPTIONS: ReadonlyArray<{ type: string; icon: string; label: st
   { type: "other", icon: "❓", label: "Autre anomalie" },
 ];
 
+/** type → libellé (réutilise les 14 anomalies pour le bandeau consensus). */
+const FLAG_LABELS: Record<string, string> = Object.fromEntries(FLAG_OPTIONS.map((o) => [o.type, o.label]));
+
+export interface ConsensusBadge {
+  n: number;
+  labels: string;
+  tone: "amber" | "zinc";
+}
+
+/**
+ * Bandeau consensus à partir de /community/consensus. **SALE EXCLU** (vente normale ≠
+ * signalement) : N = somme des votes d'anomalie ; libellés dominants (1–2) hors sale.
+ * Les 6 anomalies sans colonne dédiée sont fondues backend dans `other` → « Autre anomalie ».
+ * Renvoie null si 0 signalement d'anomalie → AUCUN bandeau (aucun bruit, aucun état vide).
+ */
+export function consensusBadge(c: Pick<ConsensusResponse, "votes"> | null | undefined): ConsensusBadge | null {
+  const votes = c?.votes;
+  if (!votes) return null;
+  const entries = Object.entries(votes).filter(([k, v]) => k !== "sale" && v > 0);
+  const n = entries.reduce((sum, [, v]) => sum + v, 0);
+  if (n < 1) return null;
+  entries.sort((a, b) => b[1] - a[1]);
+  const labels = entries
+    .slice(0, 2)
+    .map(([k]) => FLAG_LABELS[k] ?? "Autre anomalie")
+    .join(", ");
+  return { n, labels, tone: n >= 2 ? "amber" : "zinc" };
+}
+
+export function consensusLineHtml(b: ConsensusBadge): string {
+  const color = b.tone === "amber" ? "var(--amber)" : "var(--zinc-400)";
+  return `<div class="ml-consensus" style="color:${color}">⚠ ${b.n} signalement${b.n > 1 ? "s" : ""} : ${esc(b.labels)}</div>`;
+}
+
 // ── état module (un seul overlay à la fois) ────────────────────────────────
 let hostEl: HTMLElement | null = null;
 let shadow: ShadowRoot | null = null;
@@ -43,6 +78,7 @@ let root: HTMLElement | null = null;
 let onCloseCb: (() => void) | null = null;
 let ctxRef: ListingContext | null = null;
 let snapRef: SnapshotResponse | null = null;
+let consensusRef: ConsensusBadge | null = null;
 let docKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 let docClickHandler: ((e: MouseEvent) => void) | null = null;
 
@@ -226,6 +262,7 @@ export function renderMain(ctx: ListingContext, outcome: SnapshotOutcome): strin
     `<div class="ml-overlay">` +
     headerHtml() +
     contextHtml(ctx, outcome.ok ? outcome.data : null) +
+    `<div class="ml-consensus-slot">${consensusRef ? consensusLineHtml(consensusRef) : ""}</div>` +
     body +
     actions +
     footerHtml(credits) +
@@ -397,6 +434,26 @@ async function onRetry(): Promise<void> {
   );
   const outcome = await requestSnapshot(ctxRef);
   showMainView(outcome);
+  if (outcome.ok) void fetchConsensus(ctxRef);
+}
+
+/** Consensus communauté (best-effort). Injecte le bandeau dans le slot si ≥1 signalement. */
+async function fetchConsensus(ctx: ListingContext): Promise<void> {
+  const myCtx = ctxRef; // identité de CETTE session d'overlay (objet ctx frais à chaque open)
+  try {
+    const msg: GetConsensusMsg = { type: "GET_CONSENSUS", url: ctx.url, platform: ctx.platform };
+    const c = await send<ConsensusResponse>(msg);
+    // Garde par IDENTITÉ (pas par URL) : rejette overlay fermé (ctxRef=null) ET ré-ouvert,
+    // y compris ré-ouverture sur la MÊME URL (nouvel objet ctx) → pas d'injection croisée.
+    if (ctxRef !== myCtx) return;
+    const badge = consensusBadge(c);
+    if (!badge) return;
+    consensusRef = badge;
+    const slot = $(".ml-consensus-slot");
+    if (slot) slot.innerHTML = consensusLineHtml(badge);
+  } catch {
+    /* best-effort : pas de bandeau, aucun bruit */
+  }
 }
 
 // ── cycle de vie ───────────────────────────────────────────────────────────
@@ -406,6 +463,7 @@ export function openOverlay(ctx: ListingContext, outcome: SnapshotOutcome, opts:
   closeOverlay({ silent: true });
   ctxRef = ctx;
   snapRef = outcome.ok ? outcome.data : null;
+  consensusRef = null;
   onCloseCb = opts.onClose;
 
   hostEl = document.createElement("div");
@@ -419,6 +477,9 @@ export function openOverlay(ctx: ListingContext, outcome: SnapshotOutcome, opts:
   document.body.appendChild(hostEl);
 
   showMainView(outcome);
+  // Consensus communauté : best-effort, EN PARALLÈLE, non bloquant. Le snapshot est déjà
+  // affiché ; le bandeau s'injecte si/quand il arrive (seulement sur snapshot OK).
+  if (outcome.ok) void fetchConsensus(ctx);
 
   docKeyHandler = (e: KeyboardEvent) => {
     if (e.key === "Escape") closeOverlay();
@@ -446,6 +507,7 @@ export function closeOverlay(opts?: { silent?: boolean }): void {
   root = null;
   ctxRef = null;
   snapRef = null;
+  consensusRef = null;
   onCloseCb = null;
   if (!opts?.silent && cb) cb();
 }
