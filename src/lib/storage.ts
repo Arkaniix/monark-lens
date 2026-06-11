@@ -16,6 +16,7 @@ export interface LensState {
   // credits
   credits_remaining: number;
   credits_unlimited: boolean;
+  credits_updated_at: number; // ms epoch du dernier rafraîchissement du solde (cache age, A4)
   // component DB (cache local pour détection)
   component_db: ComponentDbEntry[];
   component_db_version: string;
@@ -42,6 +43,7 @@ export const DEFAULT_STATE: LensState = {
   user_plan: "free",
   credits_remaining: 0,
   credits_unlimited: false,
+  credits_updated_at: 0,
   component_db: [],
   component_db_version: "",
   component_db_updated_at: 0,

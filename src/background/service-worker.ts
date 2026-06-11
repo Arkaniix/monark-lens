@@ -6,7 +6,8 @@
 //    hashe (adhash.ts) et n'envoie que l'ad_hash au backend (snapshot/flag/consensus/signal).
 //  - Endpoints v2 UNIQUEMENT : auth/login, auth/refresh, lens/snapshot, signals/ingest,
 //    community/flag, community/consensus, config/selectors, config/component-db, users/me,
-//    credits/balance, alerts, watchlist. (score/quick/analyze*/missions = NON portés.)
+//    credits/balance, watchlist (GET/POST/DELETE). (alerts retiré LOT A ; score/quick/analyze*/
+//    missions = NON portés.)
 
 import { API_BASE, BACKOFF_BASE_MS, BACKOFF_MAX_MS, COMPONENT_DB_TTL, EXTENSION_VERSION } from "../lib/constants";
 import { canonicalAdHash } from "../lib/adhash";
@@ -25,6 +26,7 @@ import type {
   SnapshotResponse,
   TargetRequest,
   UserProfile,
+  WatchlistPage,
 } from "../lib/api-types";
 import type {
   AuthState,
@@ -78,7 +80,9 @@ async function clearTokens(): Promise<void> {
     user_email: null,
     user_plan: "free",
     credits_remaining: 0,
+    credits_updated_at: Date.now(),
   });
+  invalidateWatchlist(); // le solde et l'appartenance watchlist ne valent plus pour ce compte
 }
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -161,18 +165,24 @@ async function login(email: string, password: string): Promise<AuthTokens> {
   return tokens;
 }
 
+/** GET /credits/balance → met à jour le cache (solde + horodatage A4). Null si indisponible. */
+async function refreshBalance(): Promise<{ balance: number; unlimited: boolean } | null> {
+  const res = await apiCall("/credits/balance", {}, true);
+  if (!res.ok) return null;
+  const c = (await res.json()) as CreditsBalance;
+  const balance = c.balance ?? c.credits ?? 0;
+  const unlimited = c.unlimited === true;
+  await setState({ credits_remaining: balance, credits_unlimited: unlimited, credits_updated_at: Date.now() });
+  return { balance, unlimited };
+}
+
 async function fetchUserProfile(): Promise<UserProfile> {
   const res = await apiCall("/users/me", {}, true);
   if (!res.ok) throw new Error(`User profile fetch failed (${res.status})`);
   const data = (await res.json()) as UserProfile;
   await setState({ user_email: data.email, user_plan: data.role || "free" });
   try {
-    const cr = await apiCall("/credits/balance", {}, true);
-    if (cr.ok) {
-      const c = (await cr.json()) as CreditsBalance;
-      const balance = c.balance ?? c.credits ?? 0;
-      await setState({ credits_remaining: balance, credits_unlimited: c.unlimited === true });
-    }
+    await refreshBalance();
   } catch {
     /* best-effort */
   }
@@ -262,6 +272,68 @@ async function postTarget(endpoint: string, payload: TargetRequest, failMsg: str
     return await res.json();
   } catch (err) {
     return { error: err instanceof Error ? err.message : failMsg };
+  }
+}
+
+// ── Watchlist (A5) — pas de filtre serveur par cible → pagination + cache mémoire 5 min ──
+// Map target_id(model) → item_id. Invalidé sur POST (ADD) / DELETE (REMOVE) et au logout.
+const WATCHLIST_TTL_MS = 5 * 60 * 1000;
+let watchlistCache: { map: Map<number, number>; at: number } | null = null;
+
+function invalidateWatchlist(): void {
+  watchlistCache = null;
+}
+
+async function loadWatchlist(): Promise<Map<number, number>> {
+  if (watchlistCache && Date.now() - watchlistCache.at < WATCHLIST_TTL_MS) return watchlistCache.map;
+  const map = new Map<number, number>();
+  const limit = 100;
+  let offset = 0;
+  for (let guard = 0; guard < 100; guard++) {
+    const res = await apiCall(`/watchlist?target_type=model&limit=${limit}&offset=${offset}`, {}, true);
+    if (!res.ok) throw new Error(`Watchlist fetch failed (${res.status})`);
+    const page = (await res.json()) as WatchlistPage;
+    for (const it of page.items) map.set(it.target_id, it.id);
+    offset += page.items.length;
+    if (page.items.length === 0 || offset >= page.total) break;
+  }
+  watchlistCache = { map, at: Date.now() };
+  return map;
+}
+
+async function checkWatchlist(targetId: number): Promise<{ watched: boolean; item_id?: number }> {
+  try {
+    const id = (await loadWatchlist()).get(targetId);
+    return id === undefined ? { watched: false } : { watched: true, item_id: id };
+  } catch {
+    return { watched: false }; // best-effort : inconnu = non suivi (le fallback 409 protège l'ajout)
+  }
+}
+
+async function listWatchlist(): Promise<{ items: { target_id: number; item_id: number }[] }> {
+  try {
+    const map = await loadWatchlist();
+    return { items: [...map.entries()].map(([target_id, item_id]) => ({ target_id, item_id })) };
+  } catch {
+    return { items: [] };
+  }
+}
+
+async function removeWatchlist(targetId: number): Promise<unknown> {
+  try {
+    const itemId = (await loadWatchlist()).get(targetId);
+    if (itemId === undefined) {
+      invalidateWatchlist();
+      return { success: true }; // déjà absent → idempotent
+    }
+    const res = await apiCall(`/watchlist/${itemId}`, { method: "DELETE" }, true);
+    if (!res.ok && res.status !== 404) {
+      return { error: await detailError(res, "Watchlist remove failed"), status: res.status };
+    }
+    invalidateWatchlist();
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Watchlist remove failed" };
   }
 }
 
@@ -450,7 +522,7 @@ async function handleMessage(msg: WorkerMessage): Promise<unknown> {
     case "GET_SNAPSHOT": {
       try {
         const result = await getSnapshot(msg.url, msg.component_id, msg.asking_price, msg.platform, msg.condition ?? null);
-        await setState({ credits_remaining: result.credits_remaining });
+        await setState({ credits_remaining: result.credits_remaining, credits_updated_at: Date.now() });
         return result;
       } catch (err) {
         const status = (err as { status?: number }).status;
@@ -466,6 +538,7 @@ async function handleMessage(msg: WorkerMessage): Promise<unknown> {
         session_signals_count: (s.session_signals_count || 0) + 1,
         session_credits_earned: (s.session_credits_earned || 0) + result.credits_earned,
         credits_remaining: result.credits_remaining,
+        credits_updated_at: Date.now(),
       });
       if (result.credits_earned > 0) updateBadge(result.credits_earned);
       return result;
@@ -482,7 +555,7 @@ async function handleMessage(msg: WorkerMessage): Promise<unknown> {
     }
 
     case "UPDATE_CREDITS":
-      await setState({ credits_remaining: msg.credits });
+      await setState({ credits_remaining: msg.credits, credits_updated_at: Date.now() });
       return { success: true };
 
     case "DETECTION_STATUS":
@@ -501,11 +574,28 @@ async function handleMessage(msg: WorkerMessage): Promise<unknown> {
         return { error: err instanceof Error ? err.message : String(err) };
       }
 
-    case "CREATE_ALERT":
-      return postTarget("/alerts", msg.payload, "Alert creation failed");
+    case "ADD_WATCHLIST": {
+      const r = await postTarget("/watchlist", msg.payload, "Watchlist add failed");
+      if (!(r && typeof r === "object" && "error" in r)) invalidateWatchlist(); // POST OK → cache périmé
+      return r;
+    }
 
-    case "ADD_WATCHLIST":
-      return postTarget("/watchlist", msg.payload, "Watchlist add failed");
+    case "REMOVE_WATCHLIST":
+      return removeWatchlist(msg.target_id); // DELETE → cache invalidé dans la fonction
+
+    case "CHECK_WATCHLIST":
+      return checkWatchlist(msg.target_id);
+
+    case "LIST_WATCHLIST":
+      return listWatchlist();
+
+    case "REFRESH_BALANCE":
+      try {
+        const r = await refreshBalance();
+        return r ?? { error: "balance unavailable" };
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : String(err) };
+      }
 
     case "GET_CONSENSUS":
       try {

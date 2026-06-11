@@ -1,6 +1,6 @@
 // src/content/ui/overlay.ts — overlay RÉSULTAT (~360px, shadow closed) — ÉTAPE 3.
-// Rend honnêtement les 6 états du contrat snapshot + actions Estimer/Signaler/Alerte/
-// Watchlist. AUCUN overlay spontané : ouvert uniquement sur clic du bouton passif.
+// Rend honnêtement les 6 états du contrat snapshot + actions Estimer / Signaler / Watchlist
+// (Alerte retirée en LOT A). AUCUN overlay spontané : ouvert uniquement sur clic du bouton passif.
 // Le header rappelle TOUJOURS component_name + prix demandé (garde-fou faux-match).
 
 import { injectStyles } from "./styles";
@@ -12,8 +12,10 @@ import type { ListingContext, SnapshotOutcome } from "./snapshot-client";
 import type { ConsensusResponse, SnapshotResponse } from "../../lib/api-types";
 import type {
   AddWatchlistMsg,
-  CreateAlertMsg,
+  CheckWatchlistMsg,
   GetConsensusMsg,
+  RefreshBalanceMsg,
+  RemoveWatchlistMsg,
   SubmitFlagMsg,
 } from "../../lib/messages";
 
@@ -80,6 +82,10 @@ let onCloseCb: (() => void) | null = null;
 let ctxRef: ListingContext | null = null;
 let snapRef: SnapshotResponse | null = null;
 let consensusRef: ConsensusBadge | null = null;
+let creditsRef: number | null = null; // (A4) solde affiché en header — sur TOUS les états
+let creditsUnlimitedRef = false;
+let watchedRef: boolean | null = null; // (A5) appartenance watchlist (null = inconnu)
+let watchTouched = false; // (A5) l'utilisateur a déjà togglé cette session → hydrate ne clobbe plus
 let docKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 let docClickHandler: ((e: MouseEvent) => void) | null = null;
 
@@ -99,12 +105,18 @@ function eur(n: number): string {
 
 // ── markup ─────────────────────────────────────────────────────────────────
 
+function creditsText(): string {
+  return creditsUnlimitedRef ? "∞" : creditsRef == null ? "" : `${creditsRef} cr`;
+}
+
 function headerHtml(): string {
   return (
     `<div class="ml-head">` +
     `<span class="ml-brand"><span class="ml-brand-logo">◎</span> Monark Lens</span>` +
+    `<div class="ml-head-right">` +
+    `<span class="ml-head-credits ml-num" title="Crédits restants">${creditsText()}</span>` +
     `<button class="ml-close" data-act="close" aria-label="Fermer">${icon("x")}</button>` +
-    `</div>`
+    `</div></div>`
   );
 }
 
@@ -118,19 +130,28 @@ function contextHtml(ctx: ListingContext, snap: SnapshotResponse | null): string
   );
 }
 
-function footerHtml(creditsRemaining: number | null): string {
-  const credits = creditsRemaining == null ? "" : `<span class="ml-footer-credits">${creditsRemaining} cr</span>`;
-  return `<div class="ml-footer">${credits}<span class="ml-footer-ver">Monark Lens v2.1.0</span></div>`;
+function footerHtml(): string {
+  // (A4) Solde déplacé en header (visible tous états) → footer = version seule, pas de doublon.
+  return `<div class="ml-footer"><span class="ml-footer-ver">Monark Lens v2.1.0</span></div>`;
+}
+
+/** (A5) Bouton Watchlist selon l'appartenance pré-validée (✓ = suivi, clic = toggle). */
+function watchBtnHtml(): string {
+  const watched = watchedRef === true;
+  return (
+    `<button class="ml-act${watched ? " ml-act-ok" : ""}" data-act="watch">` +
+    `${icon("star")} ${watched ? "Suivi ✓" : "Watchlist"}</button>`
+  );
 }
 
 function actionsHtml(): string {
+  // (A1) Bouton « Alerte » retiré. Restent : Estimation complète / Signaler / Watchlist.
   return (
     `<div class="ml-actions">` +
     `<button class="ml-act ml-act-primary" data-act="estimate">${icon("bar-chart")} Estimation complète →</button>` +
     `<div class="ml-act-row">` +
     `<button class="ml-act" data-act="flag">${icon("flag")} Signaler</button>` +
-    `<button class="ml-act" data-act="alert">${icon("bell")} Alerte</button>` +
-    `<button class="ml-act" data-act="watch">${icon("star")} Watchlist</button>` +
+    watchBtnHtml() +
     `</div></div>`
   );
 }
@@ -245,16 +266,14 @@ function errorBodyHtml(outcome: { error: string; status?: number }): string {
 
 export function renderMain(ctx: ListingContext, outcome: SnapshotOutcome): string {
   let body: string;
-  let credits: number | null = null;
   let actions = "";
 
   if (outcome.ok) {
     const snap = outcome.data;
-    credits = snap.credits_remaining;
     if (snap.state === "reliable") body = reliableBodyHtml(snap);
     else if (snap.state === "insufficient") body = insufficientBodyHtml(snap);
     else body = noDataBodyHtml();
-    actions = actionsHtml(); // Estimer/Signaler/Alerte/Watchlist disponibles sur toute réponse OK
+    actions = actionsHtml(); // Estimer / Signaler / Watchlist disponibles sur toute réponse OK
   } else {
     body = errorBodyHtml(outcome);
   }
@@ -266,7 +285,7 @@ export function renderMain(ctx: ListingContext, outcome: SnapshotOutcome): strin
     `<div class="ml-consensus-slot">${consensusRef ? consensusLineHtml(consensusRef) : ""}</div>` +
     body +
     actions +
-    footerHtml(credits) +
+    footerHtml() +
     `</div>`
   );
 }
@@ -284,25 +303,6 @@ function renderFlagPanel(): string {
     `<div class="ml-flag-list">${opts}</div>` +
     `<div class="ml-actions"><button class="ml-act" data-act="back">← Retour au résultat</button></div>` +
     `</div>`
-  );
-}
-
-function renderAlertPanel(hasMedian: boolean): string {
-  const threshold = hasMedian && snapRef?.market_median != null ? Math.round(snapRef.market_median * 0.85) : null;
-  const below =
-    `<button class="ml-act" data-alert="price_below">${icon("trending-down")} Prix sous seuil` +
-    (threshold != null ? ` <span class="ml-num">(${threshold} €)</span>` : "") +
-    `</button>`;
-  return (
-    `<div class="ml-overlay">` +
-    headerHtml() +
-    `<div class="ml-flag-prompt">Quand veux-tu être alerté sur ce modèle ?</div>` +
-    `<div class="ml-actions">` +
-    `<button class="ml-act" data-alert="deal_detected">${icon("flame")} Bonne affaire détectée</button>` +
-    below +
-    `<button class="ml-act" data-alert="new_listing">${icon("sparkles")} Nouveau signal</button>` +
-    `<button class="ml-act" data-act="back">← Retour au résultat</button>` +
-    `</div></div>`
   );
 }
 
@@ -331,7 +331,6 @@ function showMainView(outcome: SnapshotOutcome): void {
 
   $('[data-act="estimate"]')?.addEventListener("click", onEstimate);
   $('[data-act="flag"]')?.addEventListener("click", showFlagView);
-  $('[data-act="alert"]')?.addEventListener("click", showAlertView);
   $('[data-act="watch"]')?.addEventListener("click", onWatchlist);
   $('[data-act="retry"]')?.addEventListener("click", onRetry);
   $('[data-act="topup"]')?.addEventListener("click", () => openWeb("/pricing"));
@@ -346,12 +345,6 @@ function showFlagView(): void {
   );
 }
 
-function showAlertView(): void {
-  setView(renderAlertPanel(snapRef?.market_median != null));
-  $('[data-act="back"]')?.addEventListener("click", () => showMainView({ ok: true, data: snapRef as SnapshotResponse }));
-  $all("[data-alert]").forEach((b) => b.addEventListener("click", () => onAlert(b.dataset.alert || "")));
-}
-
 function onEstimate(): void {
   if (!ctxRef) return;
   const url = buildEstimateUrl({
@@ -359,6 +352,8 @@ function onEstimate(): void {
     askingPrice: ctxRef.askingPrice,
     condition: ctxRef.condition,
     platform: ctxRef.platform,
+    componentId: ctxRef.componentId, // (A6) id catalogue
+    publishedAt: ctxRef.publishedAt, // (A6) date YYYY-MM-DD (LBC uniquement ; null ailleurs)
   });
   window.open(url, "_blank", "noopener");
 }
@@ -386,44 +381,114 @@ async function onFlagSelected(type: string, label: string): Promise<void> {
   }
 }
 
-async function onAlert(alertType: string): Promise<void> {
-  if (!ctxRef || !alertType) return;
-  const payload: CreateAlertMsg["payload"] = {
-    target_type: "model",
-    target_id: ctxRef.componentId,
-    alert_type: alertType,
-  };
-  if (alertType === "price_below" && snapRef?.market_median != null) {
-    payload.price_threshold = Math.round(snapRef.market_median * 0.85);
-  }
-  await sendTargetAction({ type: "CREATE_ALERT", payload }, "Alerte créée ✓");
+/** Repeint le bouton Watchlist selon l'appartenance courante (watchedRef). */
+function paintWatch(): void {
+  const btn = $('[data-act="watch"]');
+  if (!btn) return;
+  const watched = watchedRef === true;
+  btn.innerHTML = `${icon("star")} ${watched ? "Suivi ✓" : "Watchlist"}`;
+  btn.classList.toggle("ml-act-ok", watched);
+  btn.removeAttribute("aria-disabled");
 }
 
+/**
+ * (A5) Toggle Watchlist. L'appartenance est pré-validée à l'ouverture (CHECK_WATCHLIST, cache
+ * SW 5 min). Clic → ADD (non suivi) ou REMOVE (suivi). Le fallback 409 « Déjà suivi » reste un
+ * filet de sécurité si le pré-check a manqué (cache froid / course).
+ */
 async function onWatchlist(): Promise<void> {
   if (!ctxRef) return;
-  const msg: AddWatchlistMsg = {
-    type: "ADD_WATCHLIST",
-    payload: { target_type: "model", target_id: ctxRef.componentId },
-  };
-  await sendTargetAction(msg, "Ajouté ✓");
+  watchTouched = true; // intention utilisateur prioritaire sur un CHECK_WATCHLIST encore en vol
+  const targetId = ctxRef.componentId;
+  const wasWatched = watchedRef === true;
+  const btn = $('[data-act="watch"]');
+  if (btn) {
+    btn.setAttribute("aria-disabled", "true");
+    btn.textContent = wasWatched ? "Retrait…" : "Ajout…";
+  }
+  try {
+    if (wasWatched) {
+      const msg: RemoveWatchlistMsg = { type: "REMOVE_WATCHLIST", target_id: targetId };
+      const res = (await send<{ error?: string; success?: boolean }>(msg)) || {};
+      if (res.error) throw new Error(res.error);
+      watchedRef = false;
+    } else {
+      const msg: AddWatchlistMsg = { type: "ADD_WATCHLIST", payload: { target_type: "model", target_id: targetId } };
+      const res = (await send<{ error?: string; status?: number }>(msg)) || {};
+      const dup = res.status === 409; // déjà présent malgré le pré-check → on l'accepte
+      if (res.error && !dup) throw new Error(res.error);
+      watchedRef = true;
+    }
+    paintWatch();
+  } catch {
+    watchedRef = wasWatched; // restaure l'état affiché
+    if (btn) {
+      btn.textContent = "Échec";
+      btn.removeAttribute("aria-disabled");
+    }
+  }
 }
 
-/** Envoie une action alerte/watchlist et affiche un feedback inline sur le bouton. */
-async function sendTargetAction(msg: CreateAlertMsg | AddWatchlistMsg, okLabel: string): Promise<void> {
-  const sel = msg.type === "CREATE_ALERT" ? '[data-act="alert"]' : '[data-act="watch"]';
-  // En vue alerte, le bouton d'origine n'est pas présent → on revient au résultat d'abord.
-  if (msg.type === "CREATE_ALERT") showMainView({ ok: true, data: snapRef as SnapshotResponse });
-  const btn = $(sel);
+/** (A4) Repeint le chip solde du header. */
+function paintCredits(): void {
+  const el = $(".ml-head-credits");
+  if (el) el.textContent = creditsText();
+}
+
+/** (A4) Solde header : lecture instantanée du cache storage, puis refresh arrière-plan si >10 min. */
+async function hydrateCredits(outcome: SnapshotOutcome): Promise<void> {
+  const sessionRoot = root;
+  // Valeur immédiate : snapshot OK (post-action) sinon cache storage local.
+  let credits: number | null = outcome.ok ? outcome.data.credits_remaining : null;
+  let unlimited = false;
+  let updatedAt = 0;
   try {
-    const res = (await send<{ error?: string; status?: number }>(msg)) || {};
-    if (btn) {
-      const dup = res.status === 409;
-      btn.textContent = res.error && !dup ? "Échec" : dup ? "Déjà suivi" : okLabel;
-      if (!res.error || dup) btn.classList.add("ml-act-ok");
-      btn.setAttribute("aria-disabled", "true");
-    }
+    const c = (await chrome.storage.local.get([
+      "credits_remaining",
+      "credits_unlimited",
+      "credits_updated_at",
+    ])) as { credits_remaining?: number; credits_unlimited?: boolean; credits_updated_at?: number };
+    if (credits == null && typeof c.credits_remaining === "number") credits = c.credits_remaining;
+    unlimited = c.credits_unlimited === true;
+    updatedAt = typeof c.credits_updated_at === "number" ? c.credits_updated_at : 0;
   } catch {
-    if (btn) btn.textContent = "Échec";
+    /* storage indisponible : on garde la valeur du snapshot si présente */
+  }
+  if (root !== sessionRoot) return; // overlay fermé/réouvert entre-temps
+  creditsRef = credits;
+  creditsUnlimitedRef = unlimited;
+  paintCredits();
+
+  // Refresh arrière-plan si le cache a > 10 min, OU sur 402 (crédits épuisés → le chip doit être
+  // honnête : sur 402 le SW n'a pas réécrit le solde, le cache peut afficher un stale non nul).
+  const exhausted = !outcome.ok && outcome.status === 402;
+  if (exhausted || Date.now() - updatedAt > 10 * 60 * 1000) {
+    try {
+      const msg: RefreshBalanceMsg = { type: "REFRESH_BALANCE" };
+      const r = await send<{ balance?: number; unlimited?: boolean; error?: string }>(msg);
+      if (root === sessionRoot && r && !r.error && typeof r.balance === "number") {
+        creditsRef = r.balance;
+        creditsUnlimitedRef = r.unlimited === true;
+        paintCredits();
+      }
+    } catch {
+      /* best-effort : on garde la valeur du cache */
+    }
+  }
+}
+
+/** (A5) Pré-validation de l'appartenance watchlist du composant courant (best-effort). */
+async function hydrateWatchlist(ctx: ListingContext): Promise<void> {
+  const sessionRoot = root;
+  try {
+    const msg: CheckWatchlistMsg = { type: "CHECK_WATCHLIST", target_id: ctx.componentId };
+    const r = await send<{ watched?: boolean }>(msg);
+    // overlay fermé / autre annonce / l'utilisateur a déjà togglé → ne PAS écraser son intention.
+    if (root !== sessionRoot || ctxRef !== ctx || watchTouched) return;
+    watchedRef = r?.watched === true;
+    paintWatch();
+  } catch {
+    /* best-effort : appartenance inconnue → bouton « Watchlist » par défaut */
   }
 }
 
@@ -435,6 +500,7 @@ async function onRetry(): Promise<void> {
   );
   const outcome = await requestSnapshot(ctxRef);
   showMainView(outcome);
+  void hydrateCredits(outcome); // (A4) solde rafraîchi après un nouveau snapshot
   if (outcome.ok) void fetchConsensus(ctxRef);
 }
 
@@ -465,6 +531,10 @@ export function openOverlay(ctx: ListingContext, outcome: SnapshotOutcome, opts:
   ctxRef = ctx;
   snapRef = outcome.ok ? outcome.data : null;
   consensusRef = null;
+  creditsRef = outcome.ok ? outcome.data.credits_remaining : null;
+  creditsUnlimitedRef = false;
+  watchedRef = null;
+  watchTouched = false;
   onCloseCb = opts.onClose;
 
   hostEl = document.createElement("div");
@@ -478,9 +548,13 @@ export function openOverlay(ctx: ListingContext, outcome: SnapshotOutcome, opts:
   document.body.appendChild(hostEl);
 
   showMainView(outcome);
+  void hydrateCredits(outcome); // (A4) solde header sur TOUS les états (cache + refresh si vieux)
   // Consensus communauté : best-effort, EN PARALLÈLE, non bloquant. Le snapshot est déjà
   // affiché ; le bandeau s'injecte si/quand il arrive (seulement sur snapshot OK).
-  if (outcome.ok) void fetchConsensus(ctx);
+  if (outcome.ok) {
+    void fetchConsensus(ctx);
+    void hydrateWatchlist(ctx); // (A5) pré-validation de l'appartenance watchlist
+  }
 
   docKeyHandler = (e: KeyboardEvent) => {
     if (e.key === "Escape") closeOverlay();
@@ -509,6 +583,10 @@ export function closeOverlay(opts?: { silent?: boolean }): void {
   ctxRef = null;
   snapRef = null;
   consensusRef = null;
+  creditsRef = null;
+  creditsUnlimitedRef = false;
+  watchedRef = null;
+  watchTouched = false;
   onCloseCb = null;
   if (!opts?.silent && cb) cb();
 }

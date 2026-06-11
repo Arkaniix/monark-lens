@@ -82,13 +82,23 @@ export interface SubmitFlagMsg {
   intent_type: string;
   source?: string;
 }
-export interface CreateAlertMsg {
-  type: "CREATE_ALERT";
-  payload: TargetRequest;
-}
 export interface AddWatchlistMsg {
   type: "ADD_WATCHLIST";
   payload: TargetRequest;
+}
+export interface RemoveWatchlistMsg {
+  type: "REMOVE_WATCHLIST";
+  target_id: number; // composant (target_type=model) ; le SW résout l'item_id via son cache
+}
+export interface CheckWatchlistMsg {
+  type: "CHECK_WATCHLIST";
+  target_id: number; // appartenance d'UN composant (pas de filtre serveur → cache SW paginé)
+}
+export interface ListWatchlistMsg {
+  type: "LIST_WATCHLIST";
+}
+export interface RefreshBalanceMsg {
+  type: "REFRESH_BALANCE"; // GET /credits/balance via le SW (proxy strict) → met à jour le cache
 }
 export interface GetConsensusMsg {
   type: "GET_CONSENSUS";
@@ -109,8 +119,11 @@ export type WorkerMessage =
   | UpdateCreditsMsg
   | DetectionStatusMsg
   | SubmitFlagMsg
-  | CreateAlertMsg
   | AddWatchlistMsg
+  | RemoveWatchlistMsg
+  | CheckWatchlistMsg
+  | ListWatchlistMsg
+  | RefreshBalanceMsg
   | GetConsensusMsg;
 
 // SW -> content (sur les onglets monark-market.fr) : note `action`, pas `type`.

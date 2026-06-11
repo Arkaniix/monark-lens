@@ -133,10 +133,24 @@ export interface ComponentDbResponse {
   version: string;
 }
 
-// ── Alerts / Watchlist ───────────────────────────────────────────────────────
+// ── Watchlist ─────────────────────────────────────────────────────────────────
+// (Alertes retirées en LOT A : alert_type / price_threshold supprimés — plus de consommateur.)
 export interface TargetRequest {
   target_type: "model" | "ad";
   target_id: number;
-  alert_type?: string;
-  price_threshold?: number; // alerte price_below (= médiane vendue × 0.85), payload v1
+}
+
+// GET /v1/watchlist : pas de filtre par cible côté serveur → pagination + cache SW.
+export interface WatchItem {
+  id: number; // item_id = clé du DELETE /v1/watchlist/{item_id}
+  target_type: "model" | "ad";
+  target_id: number;
+  snapshot_eur?: number | null;
+}
+
+export interface WatchlistPage {
+  items: WatchItem[];
+  total: number;
+  limit: number;
+  offset: number;
 }
