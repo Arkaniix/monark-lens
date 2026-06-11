@@ -9,7 +9,7 @@ import { analyze, resetCollectState } from "./collect";
 import { loadComponentDb } from "./detect";
 import type { SyncTokensToSiteMsg } from "../lib/messages";
 
-const EXTENSION_VERSION = "2.0.0";
+const EXTENSION_VERSION = "2.1.0";
 
 // ── (A) Bridge auth site monark-market.fr ↔ extension ──────────────────────
 const SITE_ACCESS_KEY = "monark_access_token";

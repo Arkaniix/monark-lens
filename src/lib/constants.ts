@@ -4,7 +4,7 @@
 
 export const API_BASE = "https://api.monark-market.fr/v1";
 export const MONARK_WEB_URL = "https://monark-market.fr";
-export const EXTENSION_VERSION = "2.0.0";
+export const EXTENSION_VERSION = "2.1.0";
 
 export const COMPONENT_DB_TTL = 24 * 60 * 60 * 1000; // 24 h
 export const BACKOFF_BASE_MS = 1000;

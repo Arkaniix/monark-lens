@@ -120,7 +120,7 @@ function contextHtml(ctx: ListingContext, snap: SnapshotResponse | null): string
 
 function footerHtml(creditsRemaining: number | null): string {
   const credits = creditsRemaining == null ? "" : `<span class="ml-footer-credits">${creditsRemaining} cr</span>`;
-  return `<div class="ml-footer">${credits}<span class="ml-footer-ver">Monark Lens v2.0.0</span></div>`;
+  return `<div class="ml-footer">${credits}<span class="ml-footer-ver">Monark Lens v2.1.0</span></div>`;
 }
 
 function actionsHtml(): string {
