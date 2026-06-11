@@ -6,6 +6,17 @@ import { resolve, join } from "node:path";
 const root = process.cwd();
 const out = resolve(root, "dist");
 
+/** Copie récursive d'un dossier (gère les sous-dossiers, ex. assets/fonts/). */
+function copyDir(src: string, dst: string): void {
+  mkdirSync(dst, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const s = join(src, entry.name);
+    const d = join(dst, entry.name);
+    if (entry.isDirectory()) copyDir(s, d);
+    else copyFileSync(s, d);
+  }
+}
+
 /**
  * Copie les fichiers statiques (manifest, popup.html/css, icônes) vers dist/
  * aux emplacements attendus par MV3, sans passer par le pipeline JS de Vite.
@@ -17,14 +28,11 @@ function copyStatic(): Plugin {
     apply: "build",
     closeBundle() {
       mkdirSync(join(out, "popup"), { recursive: true });
-      mkdirSync(join(out, "assets"), { recursive: true });
       copyFileSync(resolve(root, "src/manifest.json"), join(out, "manifest.json"));
       copyFileSync(resolve(root, "src/popup/popup.html"), join(out, "popup/popup.html"));
       copyFileSync(resolve(root, "src/popup/popup.css"), join(out, "popup/popup.css"));
-      const assetsDir = resolve(root, "assets");
-      for (const f of readdirSync(assetsDir)) {
-        copyFileSync(join(assetsDir, f), join(out, "assets", f));
-      }
+      // Copie récursive de assets/ (icônes + assets/fonts/*.woff2 + licences OFL).
+      copyDir(resolve(root, "assets"), join(out, "assets"));
     },
   };
 }
