@@ -34,10 +34,12 @@ import type {
   SnapshotResponse,
   TargetRequest,
   UserProfile,
+  VerdictResponse,
   WatchlistPage,
 } from "../lib/api-types";
 import type {
   AuthState,
+  GetVerdictMsg,
   ReportIntentMsg,
   SendSignalMsg,
   SyncTokensToSiteMsg,
@@ -223,6 +225,26 @@ async function getSnapshot(
     throw err;
   }
   return (await res.json()) as SnapshotResponse;
+}
+
+async function getVerdict(msg: GetVerdictMsg): Promise<VerdictResponse> {
+  const ad_hash = await canonicalAdHash(msg.url);
+  const body: Record<string, unknown> = {
+    ad_hash,
+    component_id: msg.component_id,
+    asking_price: msg.asking_price,
+    platform: msg.platform,
+  };
+  if (msg.condition) body["condition"] = msg.condition;
+  if (msg.listing_age_days != null) body["listing_age_days"] = msg.listing_age_days;
+  const res = await apiCall("/lens/verdict", { method: "POST", body: JSON.stringify(body) }, true);
+  if (!res.ok) {
+    // Propage le status HTTP (comme getSnapshot) : l'overlay distingue 402 / 401 / réseau.
+    const err = new Error(await detailError(res, `Verdict failed (${res.status})`)) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
+  return (await res.json()) as VerdictResponse;
 }
 
 async function sendSignal(msg: SendSignalMsg): Promise<SignalIngestResponse> {
@@ -547,6 +569,19 @@ async function handleMessage(msg: WorkerMessage): Promise<unknown> {
     case "GET_SNAPSHOT": {
       try {
         const result = await getSnapshot(msg.url, msg.component_id, msg.asking_price, msg.platform, msg.condition ?? null);
+        await setState({ credits_remaining: result.credits_remaining, credits_updated_at: Date.now() });
+        return result;
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        const error = err instanceof Error ? err.message : String(err);
+        return status === undefined ? { error } : { error, status };
+      }
+    }
+
+    case "GET_VERDICT": {
+      try {
+        const result = await getVerdict(msg);
+        // (A4) persiste le solde renvoyé par le verdict -> header à jour après chaque estimation.
         await setState({ credits_remaining: result.credits_remaining, credits_updated_at: Date.now() });
         return result;
       } catch (err) {

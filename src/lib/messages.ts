@@ -96,6 +96,15 @@ export interface RefreshBalanceMsg {
 export interface GetIntentRulesMsg {
   type: "GET_INTENT_RULES"; // renvoie le rule set caché (SW), refresh si absent/périmé
 }
+export interface GetVerdictMsg {
+  type: "GET_VERDICT"; // -> POST /v1/lens/verdict (l'URL est hashée -> ad_hash SW-side)
+  url: string;
+  component_id: number;
+  asking_price: number;
+  platform: string;
+  condition?: string;
+  listing_age_days?: number;
+}
 export interface ReportIntentMsg {
   type: "REPORT_INTENT"; // -> POST /v1/lens/intent-report (l'URL est hashée -> ad_hash SW-side)
   url: string;
@@ -127,7 +136,8 @@ export type WorkerMessage =
   | ListWatchlistMsg
   | RefreshBalanceMsg
   | GetIntentRulesMsg
-  | ReportIntentMsg;
+  | ReportIntentMsg
+  | GetVerdictMsg;
 
 // SW -> content (sur les onglets monark-market.fr) : note `action`, pas `type`.
 export interface SyncTokensToSiteMsg {

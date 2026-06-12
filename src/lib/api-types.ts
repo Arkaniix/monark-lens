@@ -208,3 +208,31 @@ export interface IntentReportResponse {
   status: string;
   id: number;
 }
+
+// ── Verdict (POST /v1/lens/verdict) — LOT B1, consommé en B2 ──
+export interface VerdictModulation {
+  applied: boolean;
+  reason: string | null;
+  notches_down: number; // crans abaissés par l'endpoint (condition) ; cran confiance = moteur
+}
+
+export interface VerdictResponse {
+  component_id: number;
+  component_name: string | null;
+  asking_price: number;
+  state: string; // ok | no_data
+  verdict: string | null; // BUY | NEGOTIATE | LOWBALL | AVOID (slug canonique)
+  verdict_label: string | null; // Foncer | Négocier | Tenter au culot | Passer
+  verdict_description: string | null;
+  prix_conseille: number | null; // déjà clampé <= asking_price côté backend
+  buy_ceiling: number | null;
+  optimal_buy: number | null;
+  basis: string | null; // margin | percentile
+  confidence_state: string; // sufficient | insufficient
+  confidence_level: string | null; // high | medium | low
+  warnings: string[]; // disclaimer inclus — JAMAIS hardcodé côté extension
+  modulation_applied: VerdictModulation;
+  credits_charged: number;
+  credits_remaining: number;
+  cached: boolean;
+}
