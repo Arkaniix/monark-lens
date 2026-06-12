@@ -167,6 +167,18 @@ const COMPONENT_CSS = `
 /* Footer (A4 : crédits déplacés en header → footer = version seule) */
 .ml-footer { display: flex; align-items: center; justify-content: flex-end; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--hairline); }
 .ml-footer-ver { font-size: 10px; color: var(--zinc-500); }
+
+/* Verdict panel (B2) */
+.ml-vd-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ml-vd-desc { color: var(--zinc-400); font-size: 12px; margin-bottom: 10px; }
+.ml-vd-basis { font-family: var(--font-mono); font-size: 10px; color: var(--zinc-500); padding: 1px 7px; border-radius: 6px; background: var(--subcard); }
+.ml-vd-hero { font-size: 28px; font-weight: 500; line-height: 1.1; display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.ml-vd-hero-sub { font-family: var(--font-sans); font-size: 11px; font-weight: 400; color: var(--zinc-500); }
+.ml-vd-mod { display: flex; align-items: center; gap: 5px; color: var(--amber); font-size: 11px; margin: 4px 0 8px; }
+.ml-vd-warn { display: flex; flex-direction: column; gap: 4px; color: var(--zinc-400); font-size: 11px; margin-top: 6px; }
+.ml-vd-warn div { display: flex; align-items: flex-start; gap: 5px; }
+.ml-vd-warn-strong { color: var(--amber); font-size: 12px; }
+.ml-vd-cost { color: var(--zinc-500); font-size: 10px; text-align: right; margin-top: 8px; }
 `;
 
 /** Injecte tokens + polices + styles composant dans un shadow root. */

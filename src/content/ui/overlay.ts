@@ -9,6 +9,9 @@ import { icon } from "../../ui/icons";
 import { buildEstimateUrl } from "../../ui/deeplink";
 import { requestSnapshot } from "./snapshot-client";
 import type { ListingContext, SnapshotOutcome } from "./snapshot-client";
+import { requestVerdict } from "./verdict-client";
+import type { VerdictOutcome } from "./verdict-client";
+import { verdictBodyHtml } from "./verdict-panel";
 import { cacheDecision } from "../decision-cache";
 import { getCompiledRules } from "../intent-rules-client";
 import type { SnapshotResponse } from "../../lib/api-types";
@@ -134,10 +137,13 @@ function watchBtnHtml(): string {
 }
 
 function actionsHtml(): string {
-  // (A1) Bouton « Alerte » retiré. Restent : Estimation complète / Signaler / Watchlist.
+  // (B2) « Estimation rapide · 1 cr » = CTA principale (verdict d'achat) ; « Estimation
+  // complète → » (deep-link site) passe en secondaire. (A1) Bouton « Alerte » retiré.
   return (
     `<div class="ml-actions">` +
-    `<button class="ml-act ml-act-primary" data-act="estimate">${icon("bar-chart")} Estimation complète →</button>` +
+    `<button class="ml-act ml-act-primary" data-act="verdict">${icon("zap")} Estimation rapide ` +
+    `<span class="ml-btn-cost">· 1 cr</span></button>` +
+    `<button class="ml-act" data-act="estimate">${icon("bar-chart")} Estimation complète →</button>` +
     `<div class="ml-act-row">` +
     `<button class="ml-act" data-act="flag">${icon("flag")} Signaler</button>` +
     watchBtnHtml() +
@@ -329,6 +335,7 @@ function showMainView(outcome: SnapshotOutcome): void {
   if (!ctxRef) return;
   setView(renderMain(ctxRef, outcome));
 
+  $('[data-act="verdict"]')?.addEventListener("click", onVerdict);
   $('[data-act="estimate"]')?.addEventListener("click", onEstimate);
   $('[data-act="flag"]')?.addEventListener("click", showFlagView);
   $('[data-act="watch"]')?.addEventListener("click", onWatchlist);
@@ -345,6 +352,49 @@ async function showFlagView(): Promise<void> {
   $all(".ml-flag-opt").forEach((opt) =>
     opt.addEventListener("click", () => onFlagSelected(opt.dataset.flag || "")),
   );
+}
+
+// (B2) Estimation rapide (verdict d'achat 1 cr) — sous-vue dans l'overlay.
+async function onVerdict(): Promise<void> {
+  if (!ctxRef) return;
+  const ctx = ctxRef;
+  setView(
+    `<div class="ml-overlay">${headerHtml()}${contextHtml(ctx, snapRef)}` +
+      `<div class="ml-note"><span class="ml-note-title">Estimation rapide…</span><div class="ml-spinner"></div></div></div>`,
+  );
+  const outcome = await requestVerdict(ctx);
+  if (ctxRef !== ctx) return; // overlay fermé/changé pendant l'appel
+  showVerdictView(outcome);
+}
+
+function showVerdictView(outcome: VerdictOutcome): void {
+  if (!ctxRef) return;
+  const ctx = ctxRef;
+  let body: string;
+  if (outcome.ok) {
+    body = verdictBodyHtml(outcome.data);
+    creditsRef = outcome.data.credits_remaining; // (A4) solde header à jour après l'estimation
+    creditsUnlimitedRef = false;
+  } else {
+    body = errorBodyHtml(outcome); // 402 « Crédits épuisés » / 401 / réseau (rendu existant réutilisé)
+  }
+  setView(
+    `<div class="ml-overlay">` +
+      headerHtml() +
+      contextHtml(ctx, snapRef) +
+      body +
+      `<div class="ml-actions"><button class="ml-act" data-act="vd-back">← Retour au résultat</button></div>` +
+      footerHtml() +
+      `</div>`,
+  );
+  paintCredits();
+  $('[data-act="vd-back"]')?.addEventListener("click", () =>
+    showMainView({ ok: true, data: snapRef as SnapshotResponse }),
+  );
+  $('[data-act="retry"]')?.addEventListener("click", onVerdict); // réseau -> réessayer le verdict
+  $('[data-act="topup"]')?.addEventListener("click", () => openWeb("/pricing"));
+  $('[data-act="login"]')?.addEventListener("click", () => openWeb(""));
+  if (!outcome.ok) void hydrateCredits(outcome as SnapshotOutcome); // 402 -> refresh solde honnête
 }
 
 function onEstimate(): void {
