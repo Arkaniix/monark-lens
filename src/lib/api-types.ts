@@ -154,3 +154,57 @@ export interface WatchlistPage {
   limit: number;
   offset: number;
 }
+
+// ── Intent rules (GET /v1/config/intent-rules) — filtrage pré-analyse LOT C1 ──
+export type IntentGate = "confirm" | "info" | "silent";
+
+export interface IntentRuleFamily {
+  slug: string;
+  label: string;
+  overlay_message: string;
+  gate: IntentGate;
+  should_signal: boolean;
+  source: string;
+  priority: number;
+  title_patterns: string[];
+  desc_patterns: string[];
+  negation_patterns: string[];
+  negation_window_chars: number;
+  veto_patterns: string[];
+}
+
+export interface IntentRuleSet {
+  version: number;
+  updated_at: string;
+  normalization: string;
+  regex_dialect?: string;
+  desc_char_limit: number;
+  default_intent: string;
+  catch_all_intent: string;
+  symbolic_price_thresholds: Record<string, number>;
+  symbolic_placeholder_max: number;
+  price_aberration_min: number;
+  aberration_exempt_keywords: string[];
+  vocab: string[];
+  families: IntentRuleFamily[];
+}
+
+// ── Intent report (POST /v1/lens/intent-report) ──
+export type UserAction = "auto_confirmed" | "auto_overridden" | "manual_flag";
+
+export interface IntentReportRequest {
+  ad_hash: string; // jamais d'URL brute (hashée SW-side)
+  platform: string;
+  component_id?: number;
+  detected_intent?: string;
+  final_intent: string;
+  user_action: UserAction;
+  matched_flags: string[]; // "<title|desc|price>:<slug>:<extrait≤80>", ≤10
+  asking_price?: number;
+  rules_version: number;
+}
+
+export interface IntentReportResponse {
+  status: string;
+  id: number;
+}

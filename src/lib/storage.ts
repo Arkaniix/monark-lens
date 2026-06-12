@@ -3,7 +3,7 @@
 // CONSERVÉS session_signals_count / session_credits_earned (UX collecte) + current_*
 // (affichage popup détection) + auto_signal.
 
-import type { ComponentDbEntry, PlatformSelectorEntry } from "./api-types";
+import type { ComponentDbEntry, IntentRuleSet, PlatformSelectorEntry } from "./api-types";
 
 export interface LensState {
   // tokens
@@ -24,6 +24,11 @@ export interface LensState {
   // selectors (config serveur)
   platform_selectors: Record<string, PlatformSelectorEntry>;
   selectors_version: Record<string, number>;
+  // intent rules (filtrage pré-analyse — C2 ; servies + ETag, fallback embarqué côté content)
+  intent_rules: IntentRuleSet | null;
+  intent_rules_etag: string | null;
+  intent_rules_version: number | null;
+  intent_rules_fetched_at: number;
   // collecte passive
   auto_signal: boolean;
   session_signals_count: number;
@@ -49,6 +54,10 @@ export const DEFAULT_STATE: LensState = {
   component_db_updated_at: 0,
   platform_selectors: {},
   selectors_version: {},
+  intent_rules: null,
+  intent_rules_etag: null,
+  intent_rules_version: null,
+  intent_rules_fetched_at: 0,
   auto_signal: true,
   session_signals_count: 0,
   session_credits_earned: 0,

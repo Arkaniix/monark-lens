@@ -9,9 +9,17 @@
 //    credits/balance, watchlist (GET/POST/DELETE). (alerts retiré LOT A ; score/quick/analyze*/
 //    missions = NON portés.)
 
-import { API_BASE, BACKOFF_BASE_MS, BACKOFF_MAX_MS, COMPONENT_DB_TTL, EXTENSION_VERSION } from "../lib/constants";
+import {
+  API_BASE,
+  BACKOFF_BASE_MS,
+  BACKOFF_MAX_MS,
+  COMPONENT_DB_TTL,
+  EXTENSION_VERSION,
+  INTENT_RULES_TTL,
+} from "../lib/constants";
 import { canonicalAdHash } from "../lib/adhash";
 import { decodeJwtExp, nextBackoff, shouldRefresh } from "../lib/auth-logic";
+import { nextRulesPatch } from "../lib/intent-rules-logic";
 import { ensureDefaults, getState, setState } from "../lib/storage";
 import type {
   AuthTokens,
@@ -20,6 +28,9 @@ import type {
   ComponentDbResponse,
   ConsensusResponse,
   CreditsBalance,
+  IntentReportRequest,
+  IntentReportResponse,
+  IntentRuleSet,
   SelectorsConfigResponse,
   SignalIngestRequest,
   SignalIngestResponse,
@@ -30,6 +41,7 @@ import type {
 } from "../lib/api-types";
 import type {
   AuthState,
+  ReportIntentMsg,
   SendSignalMsg,
   SubmitFlagMsg,
   SyncTokensToSiteMsg,
@@ -257,6 +269,24 @@ async function submitFlag(msg: SubmitFlagMsg): Promise<CommunityFlagResponse> {
   return (await res.json()) as CommunityFlagResponse;
 }
 
+async function reportIntent(msg: ReportIntentMsg): Promise<IntentReportResponse> {
+  const ad_hash = await canonicalAdHash(msg.url);
+  const body: IntentReportRequest = {
+    ad_hash,
+    platform: msg.platform,
+    final_intent: msg.final_intent,
+    user_action: msg.user_action,
+    matched_flags: msg.matched_flags,
+    rules_version: msg.rules_version,
+  };
+  if (msg.component_id != null) body.component_id = msg.component_id;
+  if (msg.detected_intent) body.detected_intent = msg.detected_intent;
+  if (msg.asking_price != null) body.asking_price = msg.asking_price;
+  const res = await apiCall("/lens/intent-report", { method: "POST", body: JSON.stringify(body) }, true);
+  if (!res.ok) throw new Error(await detailError(res, `Intent report failed (${res.status})`));
+  return (await res.json()) as IntentReportResponse;
+}
+
 async function getConsensus(url: string, platform: string): Promise<ConsensusResponse> {
   const ad_hash = await canonicalAdHash(url);
   const params = new URLSearchParams({ ad_hash, platform });
@@ -377,6 +407,25 @@ async function refreshSelectors(): Promise<void> {
   }
 }
 
+// ── Intent rules (C2) : GET conditionnel If-None-Match → 304 (no-op) / 200 (store) ──
+async function refreshIntentRules(): Promise<void> {
+  try {
+    const { intent_rules_etag } = await getState(["intent_rules_etag"]);
+    const headers: Record<string, string> = {};
+    if (intent_rules_etag) headers["If-None-Match"] = intent_rules_etag;
+    const res = await apiCall("/config/intent-rules", { headers });
+    const etag = res.headers.get("ETag");
+    const body = res.status === 200 ? ((await res.json()) as IntentRuleSet) : null;
+    const patch = nextRulesPatch(res.status, etag, body, Date.now());
+    if (patch) {
+      await setState(patch);
+      if (res.status === 200) console.log(`[Monark SW] Intent rules refreshed (v${body?.version})`);
+    }
+  } catch (err) {
+    console.error("[Monark SW] Intent rules refresh failed:", err);
+  }
+}
+
 // ── Lifecycle ──
 
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -392,6 +441,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   await ensureDefaults();
   void refreshComponentDb();
   void refreshSelectors();
+  void refreshIntentRules();
 });
 
 chrome.alarms.create("refresh-data", { periodInMinutes: 60 });
@@ -402,6 +452,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     void refreshComponentDb();
   }
   void refreshSelectors();
+  void refreshIntentRules(); // ETag → 304 bon marché si inchangé
 });
 
 // ── Bridge auth SW -> onglets monark-market.fr ──
@@ -553,6 +604,23 @@ async function handleMessage(msg: WorkerMessage): Promise<unknown> {
       }
       return component_db;
     }
+
+    case "GET_INTENT_RULES": {
+      const { intent_rules, intent_rules_fetched_at } = await getState(["intent_rules", "intent_rules_fetched_at"]);
+      if (!intent_rules || Date.now() - (intent_rules_fetched_at || 0) > INTENT_RULES_TTL) {
+        await refreshIntentRules();
+        const fresh = await getState(["intent_rules"]);
+        return fresh.intent_rules ?? null; // null si jamais fetché → le content utilise son fallback embarqué
+      }
+      return intent_rules;
+    }
+
+    case "REPORT_INTENT":
+      try {
+        return await reportIntent(msg);
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : String(err) };
+      }
 
     case "UPDATE_CREDITS":
       await setState({ credits_remaining: msg.credits, credits_updated_at: Date.now() });

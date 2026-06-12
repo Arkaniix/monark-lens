@@ -105,6 +105,22 @@ export interface GetConsensusMsg {
   url: string; // hashée dans le SW -> ad_hash
   platform: string;
 }
+// ── Filtrage pré-analyse (C2) ──
+export interface GetIntentRulesMsg {
+  type: "GET_INTENT_RULES"; // renvoie le rule set caché (SW), refresh si absent/périmé
+}
+export interface ReportIntentMsg {
+  type: "REPORT_INTENT"; // -> POST /v1/lens/intent-report (l'URL est hashée -> ad_hash SW-side)
+  url: string;
+  platform: string;
+  component_id: number | null;
+  detected_intent: string | null;
+  final_intent: string;
+  user_action: "auto_confirmed" | "auto_overridden" | "manual_flag";
+  matched_flags: string[];
+  asking_price: number | null;
+  rules_version: number;
+}
 
 export type WorkerMessage =
   | GetAuthStateMsg
@@ -124,7 +140,9 @@ export type WorkerMessage =
   | CheckWatchlistMsg
   | ListWatchlistMsg
   | RefreshBalanceMsg
-  | GetConsensusMsg;
+  | GetConsensusMsg
+  | GetIntentRulesMsg
+  | ReportIntentMsg;
 
 // SW -> content (sur les onglets monark-market.fr) : note `action`, pas `type`.
 export interface SyncTokensToSiteMsg {
