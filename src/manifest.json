@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Monark Lens",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Analyse instantanée des prix hardware d'occasion sur Leboncoin, eBay et Vinted — médiane vendue, verdict, tendance.",
   "permissions": [
     "storage",

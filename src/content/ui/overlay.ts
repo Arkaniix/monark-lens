@@ -124,7 +124,7 @@ function contextHtml(ctx: ListingContext, snap: SnapshotResponse | null): string
 
 function footerHtml(): string {
   // (A4) Solde déplacé en header (visible tous états) → footer = version seule, pas de doublon.
-  return `<div class="ml-footer"><span class="ml-footer-ver">Monark Lens v2.1.0</span></div>`;
+  return `<div class="ml-footer"><span class="ml-footer-ver">Monark Lens v2.2.0</span></div>`;
 }
 
 /** (A5) Bouton Watchlist selon l'appartenance pré-validée (✓ = suivi, clic = toggle). */
