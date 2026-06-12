@@ -10,7 +10,16 @@ const ctx: ListingContext = {
   componentName: "RTX 3060",
   askingPrice: 200,
   condition: "good",
-  intentType: "sale",
+  intent: {
+    intent: "sale",
+    gate: "info",
+    should_signal: true,
+    label: "",
+    overlay_message: "",
+    matched_flags: [],
+    rules_version: 1,
+    quantity: 1,
+  },
   publishedAt: null,
 };
 

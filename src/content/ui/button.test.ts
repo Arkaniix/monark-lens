@@ -3,47 +3,33 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { mountAnalyzeButton, mountAnalyzePlaceholder, removeAnalyzeButton, shouldShowAnalyzeButton } from "./button";
 import type { ListingContext } from "./snapshot-client";
+import type { IntentDecision } from "../classify";
 
-describe("shouldShowAnalyzeButton — gate apparition V2-03", () => {
-  it("test_spam (shouldOverlay=false) → JAMAIS", () => {
-    expect(shouldShowAnalyzeButton("test_spam", false)).toBe(false);
+describe("shouldShowAnalyzeButton — gate apparition (C2)", () => {
+  it("silent (test_spam) → JAMAIS de bouton", () => {
+    expect(shouldShowAnalyzeButton("silent")).toBe(false);
   });
-
-  it("bundle → JAMAIS (lot : verdict honnête impossible sur le composant seul)", () => {
-    expect(shouldShowAnalyzeButton("bundle", true)).toBe(false);
+  it("info → bouton", () => {
+    expect(shouldShowAnalyzeButton("info")).toBe(true);
   });
-
-  it("wanted → JAMAIS (demande d'achat : analyse sans objet)", () => {
-    expect(shouldShowAnalyzeButton("wanted", true)).toBe(false);
-  });
-
-  it("sale → oui", () => {
-    expect(shouldShowAnalyzeButton("sale", true)).toBe(true);
-  });
-
-  it("autres intents (broken/mining/reserved/… ) → oui (médiane marché utile)", () => {
-    for (const t of [
-      "broken",
-      "mining",
-      "rma_refurb",
-      "professional",
-      "reserved",
-      "trade",
-      "box_only",
-      "multiple",
-      "accessory",
-      "symbolic_price",
-      "rental",
-      "parts_from_device",
-    ]) {
-      expect(shouldShowAnalyzeButton(t, true)).toBe(true);
-    }
+  it("confirm → bouton (bundle/wanted affichent désormais le bouton, gate de confirmation au clic)", () => {
+    expect(shouldShowAnalyzeButton("confirm")).toBe(true);
   });
 });
 
 describe("mount / remove bouton passif", () => {
   afterEach(() => removeAnalyzeButton());
 
+  const decision: IntentDecision = {
+    intent: "sale",
+    gate: "info",
+    should_signal: true,
+    label: "",
+    overlay_message: "",
+    matched_flags: [],
+    rules_version: 1,
+    quantity: 1,
+  };
   const ctx: ListingContext = {
     platform: "leboncoin",
     url: "https://www.leboncoin.fr/ad/x/1",
@@ -51,7 +37,7 @@ describe("mount / remove bouton passif", () => {
     componentName: "RTX 3060",
     askingPrice: 200,
     condition: "good",
-    intentType: "sale",
+    intent: decision,
     publishedAt: null,
   };
 

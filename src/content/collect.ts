@@ -1,8 +1,11 @@
 // src/content/collect.ts — orchestration v2 (SANS overlay) : detect → parse → match → classify
 // → DETECTION_STATUS (pré-remplit le popup) → collecte passive (gate intent.shouldSignal).
 // Garde stricte : ne fait RIEN hors page détail des 3 plateformes.
+import { classifyWithRules } from "./classify";
+import type { IntentDecision } from "./classify";
+import { extractDefects } from "./defects";
 import { detectPlatform, findVariantName, isComponentDbLoaded, loadComponentDb, matchComponent } from "./detect";
-import { classifyIntent, extractDefects } from "./filters";
+import { getCompiledRules } from "./intent-rules-client";
 import { extractListingData, isHardwareCategory } from "./parsers";
 import {
   mountAnalyzeButton,
@@ -11,7 +14,7 @@ import {
   shouldShowAnalyzeButton,
 } from "./ui/button";
 import { closeOverlay } from "./ui/overlay";
-import type { IntentResult, MatchResult, ParsedListing, Platform } from "./types";
+import type { MatchResult, ParsedListing, Platform } from "./types";
 import type { ListingContext } from "./ui/snapshot-client";
 import type { SendSignalMsg } from "../lib/messages";
 
@@ -107,15 +110,17 @@ async function analyzeInner(): Promise<void> {
   // Pré-remplissage du popup (détection courante).
   notifyDetectionStatus(detection.platform, match.componentId, match.componentName, askingPrice);
 
-  // Classification (porte de signal) + collecte passive — INCHANGÉ (V2-02).
-  const intent = classifyIntent(listing.title, askingPrice, listing.description, match.category);
-  if (intent.shouldSignal) {
-    await sendPassiveSignal(detection.platform, listing, match, intent);
+  // Classification DRIVÉE PAR RÈGLES (C2) : règles servies (SW caché → fallback embarqué),
+  // compilées + mémoïsées. Porte de signal = should_signal de la famille.
+  const rules = await getCompiledRules();
+  const decision = classifyWithRules(rules, listing.title, askingPrice, listing.description, match.category);
+  if (decision.should_signal) {
+    await sendPassiveSignal(detection.platform, listing, match, decision);
   }
 
-  // (V2-03) Bouton passif. Détail + composant déjà acquis ici ; on n'ajoute le bouton
-  // que si l'intent l'autorise (jamais bundle / wanted / test_spam). Seul ajout à la page.
-  if (shouldShowAnalyzeButton(intent.type, intent.shouldOverlay)) {
+  // (C2) Bouton passif piloté par le gate : `silent` -> rien, `info`/`confirm` -> bouton.
+  // Le flux de confirmation (gate `confirm`) est géré au clic (button.ts / overlay.ts, C2.c).
+  if (shouldShowAnalyzeButton(decision.gate)) {
     const ctx: ListingContext = {
       platform: detection.platform,
       url: listing.url,
@@ -123,7 +128,7 @@ async function analyzeInner(): Promise<void> {
       componentName: match.componentName,
       askingPrice,
       condition: listing.condition,
-      intentType: intent.type,
+      intent: decision,
       publishedAt: listing.publishedAt,
     };
     mountAnalyzeButton(ctx);
@@ -136,7 +141,7 @@ async function sendPassiveSignal(
   platform: Platform,
   listing: ParsedListing,
   match: MatchResult,
-  intent: IntentResult,
+  intent: IntentDecision,
 ): Promise<void> {
   if (signalSentForUrl === listing.url) return;
   try {
@@ -157,7 +162,7 @@ async function sendPassiveSignal(
       condition: listing.condition,
       region: listing.location,
       title: listing.title,
-      listing_intent: intent.type,
+      listing_intent: intent.intent, // slug unifié (le backend accepte tout le vocab, fix E)
       quantity: intent.quantity,
       has_warranty: /garant|warranty/i.test(pageText),
       has_invoice: /facture|invoice|ticket de caisse|preuve d'achat/i.test(pageText),
@@ -166,13 +171,13 @@ async function sendPassiveSignal(
           pageText,
         ),
       defects: extractDefects(pageText),
-      is_bundle: intent.type === "bundle",
+      is_bundle: intent.intent === "bundle",
       signal_type: "passive",
     };
     const result = (await chrome.runtime.sendMessage(msg)) as { listing_intent?: string };
     signalSentForUrl = listing.url;
-    if (result?.listing_intent && result.listing_intent !== intent.type) {
-      console.log(`[Monark] Backend reclassified: regex=${intent.type} → llm=${result.listing_intent}`);
+    if (result?.listing_intent && result.listing_intent !== intent.intent) {
+      console.log(`[Monark] Backend reclassified: regex=${intent.intent} → llm=${result.listing_intent}`);
     }
   } catch (err) {
     console.warn("[Monark] Passive signal failed:", err);

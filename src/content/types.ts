@@ -32,13 +32,5 @@ export interface MatchResult {
   matchType: MatchType;
   variantName?: string | null;
 }
-
-export interface IntentResult {
-  type: string;
-  confidence: number;
-  flags: string[];
-  quantity: number;
-  shouldSignal: boolean;
-  shouldOverlay: boolean;
-  overlayMessage?: string;
-}
+// IntentResult (classifieur hardcodé v2) retiré en C2.b — remplacé par IntentDecision
+// (src/content/classify.ts), drivé par les règles servies.

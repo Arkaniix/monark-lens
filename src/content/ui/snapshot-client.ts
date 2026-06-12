@@ -4,6 +4,7 @@
 
 import type { SnapshotResponse } from "../../lib/api-types";
 import type { GetSnapshotMsg } from "../../lib/messages";
+import type { IntentDecision } from "../classify";
 
 /** Contexte d'une annonce analysable (issu de collect.ts). */
 export interface ListingContext {
@@ -13,7 +14,7 @@ export interface ListingContext {
   componentName: string | null;
   askingPrice: number;
   condition: string | null;
-  intentType: string;
+  intent: IntentDecision; // décision de filtrage (gate / label / overlay_message / flags / rules_version)
   publishedAt: string | null; // date de publication (LBC uniquement) pour le deep-link estimateur
 }
 

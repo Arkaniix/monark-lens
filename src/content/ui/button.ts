@@ -6,23 +6,21 @@ import { injectStyles } from "./styles";
 import { openOverlay } from "./overlay";
 import { requestSnapshot } from "./snapshot-client";
 import type { ListingContext } from "./snapshot-client";
+import type { IntentGate } from "../../lib/api-types";
 
 const HOST_ID = "monark-lens-button";
 
 /**
- * Gate d'apparition (partie intent) : montre le bouton SAUF bundle / wanted / test_spam.
- *
- * NOUVELLE RÈGLE PRODUIT V2-03, divergence v1 ASSUMÉE : en v1 l'overlay s'affichait AUSSI
- * sur bundle (score complet) et wanted (overlay filtré) — seul test_spam avait
- * shouldOverlay:false. v2 s'en écarte volontairement : un verdict honnête est impossible
- * sur un LOT (prix non représentatif du composant seul) et l'analyse est SANS OBJET sur
- * une DEMANDE d'achat (rien à acheter). On exclut donc explicitement bundle + wanted, et
- * test_spam reste exclu via shouldOverlay===false.
+ * Gate d'apparition (C2) : piloté par le `gate` servi.
+ *  - `silent`  (test_spam) -> AUCUN bouton.
+ *  - `info`    (sale, mining, rma_refurb, professional, reserved, aberration) -> bouton + snapshot.
+ *  - `confirm` (wanted, trade, box_only, broken, bundle, multiple, accessory, rental,
+ *               symbolic_price, parts_from_device, photo_scam) -> bouton + gate de confirmation
+ *               (C2.c) AVANT tout snapshot. Divergence v1 ASSUMÉE : bundle/wanted affichent
+ *               désormais le bouton (comportement voulu : confirmer plutôt que masquer).
  */
-export function shouldShowAnalyzeButton(intentType: string, shouldOverlay: boolean): boolean {
-  if (!shouldOverlay) return false; // test_spam
-  if (intentType === "bundle" || intentType === "wanted") return false;
-  return true;
+export function shouldShowAnalyzeButton(gate: IntentGate): boolean {
+  return gate !== "silent";
 }
 
 let hostEl: HTMLElement | null = null;
