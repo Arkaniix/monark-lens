@@ -4,10 +4,10 @@
 //  - PROXY STRICT : content/popup ne font jamais de fetch ; tout passe par le SW.
 //  - AUCUNE URL brute sur le réseau : les URLs arrivent en messaging interne, le SW les
 //    hashe (adhash.ts) et n'envoie que l'ad_hash au backend (snapshot/flag/consensus/signal).
-//  - Endpoints v2 UNIQUEMENT : auth/login, auth/refresh, lens/snapshot, signals/ingest,
-//    community/flag, community/consensus, config/selectors, config/component-db, users/me,
-//    credits/balance, watchlist (GET/POST/DELETE). (alerts retiré LOT A ; score/quick/analyze*/
-//    missions = NON portés.)
+//  - Endpoints v2 UNIQUEMENT : auth/login, auth/refresh, lens/snapshot, lens/intent-report,
+//    signals/ingest, config/selectors, config/component-db, config/intent-rules, users/me,
+//    credits/balance, watchlist (GET/POST/DELETE). (community/flag + consensus retirés en C2 —
+//    backend dormant intact ; alerts retiré LOT A ; score/quick/analyze*/missions = NON portés.)
 
 import {
   API_BASE,
@@ -23,10 +23,7 @@ import { nextRulesPatch } from "../lib/intent-rules-logic";
 import { ensureDefaults, getState, setState } from "../lib/storage";
 import type {
   AuthTokens,
-  CommunityFlagRequest,
-  CommunityFlagResponse,
   ComponentDbResponse,
-  ConsensusResponse,
   CreditsBalance,
   IntentReportRequest,
   IntentReportResponse,
@@ -43,7 +40,6 @@ import type {
   AuthState,
   ReportIntentMsg,
   SendSignalMsg,
-  SubmitFlagMsg,
   SyncTokensToSiteMsg,
   WorkerMessage,
 } from "../lib/messages";
@@ -255,20 +251,6 @@ async function sendSignal(msg: SendSignalMsg): Promise<SignalIngestResponse> {
   return (await res.json()) as SignalIngestResponse;
 }
 
-async function submitFlag(msg: SubmitFlagMsg): Promise<CommunityFlagResponse> {
-  const ad_hash = await canonicalAdHash(msg.url);
-  const body: CommunityFlagRequest = {
-    ad_hash,
-    platform: msg.platform,
-    component_id: msg.component_id,
-    intent_type: msg.intent_type,
-  };
-  if (msg.source) body.source = msg.source;
-  const res = await apiCall("/community/flag", { method: "POST", body: JSON.stringify(body) }, true);
-  if (!res.ok) throw new Error(await detailError(res, "Flag submission failed"));
-  return (await res.json()) as CommunityFlagResponse;
-}
-
 async function reportIntent(msg: ReportIntentMsg): Promise<IntentReportResponse> {
   const ad_hash = await canonicalAdHash(msg.url);
   const body: IntentReportRequest = {
@@ -285,14 +267,6 @@ async function reportIntent(msg: ReportIntentMsg): Promise<IntentReportResponse>
   const res = await apiCall("/lens/intent-report", { method: "POST", body: JSON.stringify(body) }, true);
   if (!res.ok) throw new Error(await detailError(res, `Intent report failed (${res.status})`));
   return (await res.json()) as IntentReportResponse;
-}
-
-async function getConsensus(url: string, platform: string): Promise<ConsensusResponse> {
-  const ad_hash = await canonicalAdHash(url);
-  const params = new URLSearchParams({ ad_hash, platform });
-  const res = await apiCall(`/community/consensus?${params.toString()}`, {}, true);
-  if (!res.ok) return { consensus_intent: null, total_voters: 0, has_consensus: false };
-  return (await res.json()) as ConsensusResponse;
 }
 
 async function postTarget(endpoint: string, payload: TargetRequest, failMsg: string): Promise<unknown> {
@@ -635,13 +609,6 @@ async function handleMessage(msg: WorkerMessage): Promise<unknown> {
       });
       return { success: true };
 
-    case "SUBMIT_FLAG":
-      try {
-        return await submitFlag(msg);
-      } catch (err) {
-        return { error: err instanceof Error ? err.message : String(err) };
-      }
-
     case "ADD_WATCHLIST": {
       const r = await postTarget("/watchlist", msg.payload, "Watchlist add failed");
       if (!(r && typeof r === "object" && "error" in r)) invalidateWatchlist(); // POST OK → cache périmé
@@ -663,13 +630,6 @@ async function handleMessage(msg: WorkerMessage): Promise<unknown> {
         return r ?? { error: "balance unavailable" };
       } catch (err) {
         return { error: err instanceof Error ? err.message : String(err) };
-      }
-
-    case "GET_CONSENSUS":
-      try {
-        return await getConsensus(msg.url, msg.platform);
-      } catch {
-        return { consensus_intent: null, total_voters: 0, has_consensus: false };
       }
 
     default: {

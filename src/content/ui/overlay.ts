@@ -10,70 +10,58 @@ import { buildEstimateUrl } from "../../ui/deeplink";
 import { requestSnapshot } from "./snapshot-client";
 import type { ListingContext, SnapshotOutcome } from "./snapshot-client";
 import { cacheDecision } from "../decision-cache";
-import type { ConsensusResponse, SnapshotResponse } from "../../lib/api-types";
+import { getCompiledRules } from "../intent-rules-client";
+import type { SnapshotResponse } from "../../lib/api-types";
 import type {
   AddWatchlistMsg,
   CheckWatchlistMsg,
-  GetConsensusMsg,
   RefreshBalanceMsg,
   RemoveWatchlistMsg,
   ReportIntentMsg,
-  SubmitFlagMsg,
 } from "../../lib/messages";
 
 const HOST_ID = "monark-lens-overlay";
 const MONARK_WEB_URL = "https://monark-market.fr"; // SYNC: src/lib/constants.ts
 
-/** 14 anomalies « Signaler » — codes + libellés VERBATIM dist v1 (showFlagSelector). */
-export const FLAG_OPTIONS: ReadonlyArray<{ type: string; icon: string; label: string }> = [
-  { type: "broken", icon: "alert-triangle", label: "Composant HS / pour pièces" },
-  { type: "bundle", icon: "monitor", label: "PC complet / bundle" },
-  { type: "box_only", icon: "package", label: "Boîte / emballage seul" },
-  { type: "trade", icon: "repeat", label: "Échange / troc" },
-  { type: "wanted", icon: "search", label: "Demande d'achat" },
-  { type: "mining", icon: "zap", label: "Ex-minage" },
-  { type: "accessory", icon: "wrench", label: "Accessoire uniquement" },
-  { type: "symbolic_price", icon: "message-circle", label: "Prix symbolique / à négocier" },
-  { type: "reserved", icon: "lock", label: "Réservé / vendu" },
-  { type: "multiple", icon: "layers", label: "Lot / quantité multiple" },
-  { type: "rental", icon: "house", label: "Location" },
-  { type: "rma_refurb", icon: "rotate-ccw", label: "Reconditionné / RMA" },
-  { type: "professional", icon: "store", label: "Vendeur professionnel" },
-  { type: "other", icon: "circle-help", label: "Autre anomalie" },
-];
+/** slug → icône pour le panneau « Signaler » (les libellés FR viennent du rule set servi). */
+const FLAG_ICON: Record<string, string> = {
+  broken: "alert-triangle",
+  bundle: "monitor",
+  box_only: "package",
+  trade: "repeat",
+  wanted: "search",
+  mining: "zap",
+  accessory: "wrench",
+  symbolic_price: "message-circle",
+  reserved: "lock",
+  multiple: "layers",
+  rental: "house",
+  rma_refurb: "rotate-ccw",
+  professional: "store",
+  parts_from_device: "wrench",
+  photo_scam: "alert-triangle",
+  test_spam: "circle-help",
+  other: "circle-help",
+};
 
-/** type → libellé (réutilise les 14 anomalies pour le bandeau consensus). */
-const FLAG_LABELS: Record<string, string> = Object.fromEntries(FLAG_OPTIONS.map((o) => [o.type, o.label]));
-
-export interface ConsensusBadge {
-  n: number;
-  labels: string;
-  tone: "amber" | "zinc";
+export interface FlagOption {
+  type: string;
+  icon: string;
+  label: string;
 }
 
 /**
- * Bandeau consensus à partir de /community/consensus. **SALE EXCLU** (vente normale ≠
- * signalement) : N = somme des votes d'anomalie ; libellés dominants (1–2) hors sale.
- * Les 6 anomalies sans colonne dédiée sont fondues backend dans `other` → « Autre anomalie ».
- * Renvoie null si 0 signalement d'anomalie → AUCUN bandeau (aucun bruit, aucun état vide).
+ * Options « Signaler » générées DYNAMIQUEMENT depuis le rule set (familles slug ≠ sale,
+ * libellés FR servis) + catch-all `other`. Remplace la liste hardcodée v1. L'envoi passe
+ * par REPORT_INTENT (user_action=manual_flag) — `/community/flag` et le consensus Waze sont
+ * retirés CÔTÉ EXTENSION (backend laissé dormant, intact).
  */
-export function consensusBadge(c: Pick<ConsensusResponse, "votes"> | null | undefined): ConsensusBadge | null {
-  const votes = c?.votes;
-  if (!votes) return null;
-  const entries = Object.entries(votes).filter(([k, v]) => k !== "sale" && v > 0);
-  const n = entries.reduce((sum, [, v]) => sum + v, 0);
-  if (n < 1) return null;
-  entries.sort((a, b) => b[1] - a[1]);
-  const labels = entries
-    .slice(0, 2)
-    .map(([k]) => FLAG_LABELS[k] ?? "Autre anomalie")
-    .join(", ");
-  return { n, labels, tone: n >= 2 ? "amber" : "zinc" };
-}
-
-export function consensusLineHtml(b: ConsensusBadge): string {
-  const color = b.tone === "amber" ? "var(--amber)" : "var(--zinc-400)";
-  return `<div class="ml-consensus" style="color:${color}">${icon("alert-triangle")} ${b.n} signalement${b.n > 1 ? "s" : ""} : ${esc(b.labels)}</div>`;
+export function flagOptionsFromRules(families: ReadonlyArray<{ slug: string; label: string }>): FlagOption[] {
+  const opts = families
+    .filter((f) => f.slug !== "sale")
+    .map((f) => ({ type: f.slug, icon: FLAG_ICON[f.slug] ?? "circle-help", label: f.label }));
+  opts.push({ type: "other", icon: "circle-help", label: "Autre anomalie" });
+  return opts;
 }
 
 // ── état module (un seul overlay à la fois) ────────────────────────────────
@@ -83,7 +71,6 @@ let root: HTMLElement | null = null;
 let onCloseCb: (() => void) | null = null;
 let ctxRef: ListingContext | null = null;
 let snapRef: SnapshotResponse | null = null;
-let consensusRef: ConsensusBadge | null = null;
 let creditsRef: number | null = null; // (A4) solde affiché en header — sur TOUS les états
 let creditsUnlimitedRef = false;
 let watchedRef: boolean | null = null; // (A5) appartenance watchlist (null = inconnu)
@@ -293,7 +280,6 @@ export function renderMain(ctx: ListingContext, outcome: SnapshotOutcome): strin
     `<div class="ml-overlay">` +
     headerHtml() +
     contextHtml(ctx, outcome.ok ? outcome.data : null) +
-    `<div class="ml-consensus-slot">${consensusRef ? consensusLineHtml(consensusRef) : ""}</div>` +
     infoBadgeHtml(ctx) +
     body +
     actions +
@@ -302,12 +288,14 @@ export function renderMain(ctx: ListingContext, outcome: SnapshotOutcome): strin
   );
 }
 
-function renderFlagPanel(): string {
-  const opts = FLAG_OPTIONS.map(
-    (o) =>
-      `<div class="ml-flag-opt" data-flag="${o.type}" data-label="${esc(o.label)}">` +
-      `<span class="ml-flag-ico">${icon(o.icon)}</span> ${esc(o.label)}</div>`,
-  ).join("");
+function renderFlagPanel(options: ReadonlyArray<FlagOption>): string {
+  const opts = options
+    .map(
+      (o) =>
+        `<div class="ml-flag-opt" data-flag="${o.type}">` +
+        `<span class="ml-flag-ico">${icon(o.icon)}</span> ${esc(o.label)}</div>`,
+    )
+    .join("");
   return (
     `<div class="ml-overlay">` +
     headerHtml() +
@@ -349,11 +337,13 @@ function showMainView(outcome: SnapshotOutcome): void {
   $('[data-act="login"]')?.addEventListener("click", () => openWeb(""));
 }
 
-function showFlagView(): void {
-  setView(renderFlagPanel());
+async function showFlagView(): Promise<void> {
+  const rules = await getCompiledRules();
+  if (!ctxRef) return;
+  setView(renderFlagPanel(flagOptionsFromRules(rules.families)));
   $('[data-act="back"]')?.addEventListener("click", () => showMainView({ ok: true, data: snapRef as SnapshotResponse }));
   $all(".ml-flag-opt").forEach((opt) =>
-    opt.addEventListener("click", () => onFlagSelected(opt.dataset.flag || "", opt.dataset.label || "")),
+    opt.addEventListener("click", () => onFlagSelected(opt.dataset.flag || "")),
   );
 }
 
@@ -374,23 +364,14 @@ function openWeb(path: string): void {
   window.open(`${MONARK_WEB_URL}${path}`, "_blank", "noopener");
 }
 
-async function onFlagSelected(type: string, label: string): Promise<void> {
+async function onFlagSelected(type: string): Promise<void> {
   if (!ctxRef || !type) return;
+  const ctx = ctxRef;
   const list = $(".ml-flag-list");
-  if (list) list.innerHTML = `<div class="ml-note"><span class="ml-note-title">✓ Signalé</span>${esc(label)} — merci.</div>`;
-  const msg: SubmitFlagMsg = {
-    type: "SUBMIT_FLAG",
-    url: ctxRef.url,
-    platform: ctxRef.platform,
-    component_id: ctxRef.componentId,
-    intent_type: type,
-    source: "manual_flag",
-  };
-  try {
-    await send(msg);
-  } catch {
-    /* best-effort : la confirmation inline reste affichée */
-  }
+  if (list) list.innerHTML = `<div class="ml-note"><span class="ml-note-title">✓ Signalé</span>Merci — c'est noté.</div>`;
+  // Signalement manuel -> rapport (user_action=manual_flag, final_intent = anomalie choisie ;
+  // detected_intent = classif locale ; matched_flags = extraits du classifieur).
+  void reportDecision(ctx, "manual_flag", type);
 }
 
 /** Repeint le bouton Watchlist selon l'appartenance courante (watchedRef). */
@@ -513,26 +494,6 @@ async function onRetry(): Promise<void> {
   const outcome = await requestSnapshot(ctxRef);
   showMainView(outcome);
   void hydrateCredits(outcome); // (A4) solde rafraîchi après un nouveau snapshot
-  if (outcome.ok) void fetchConsensus(ctxRef);
-}
-
-/** Consensus communauté (best-effort). Injecte le bandeau dans le slot si ≥1 signalement. */
-async function fetchConsensus(ctx: ListingContext): Promise<void> {
-  const myCtx = ctxRef; // identité de CETTE session d'overlay (objet ctx frais à chaque open)
-  try {
-    const msg: GetConsensusMsg = { type: "GET_CONSENSUS", url: ctx.url, platform: ctx.platform };
-    const c = await send<ConsensusResponse>(msg);
-    // Garde par IDENTITÉ (pas par URL) : rejette overlay fermé (ctxRef=null) ET ré-ouvert,
-    // y compris ré-ouverture sur la MÊME URL (nouvel objet ctx) → pas d'injection croisée.
-    if (ctxRef !== myCtx) return;
-    const badge = consensusBadge(c);
-    if (!badge) return;
-    consensusRef = badge;
-    const slot = $(".ml-consensus-slot");
-    if (slot) slot.innerHTML = consensusLineHtml(badge);
-  } catch {
-    /* best-effort : pas de bandeau, aucun bruit */
-  }
 }
 
 // ── cycle de vie ───────────────────────────────────────────────────────────
@@ -565,7 +526,6 @@ function setupHostAndHandlers(): void {
 function resetRefs(ctx: ListingContext, onClose: () => void): void {
   ctxRef = ctx;
   snapRef = null;
-  consensusRef = null;
   creditsRef = null;
   creditsUnlimitedRef = false;
   watchedRef = null;
@@ -725,9 +685,7 @@ export function openOverlay(ctx: ListingContext, outcome: SnapshotOutcome, opts:
 
   showMainView(outcome);
   void hydrateCredits(outcome); // (A4) solde header sur TOUS les états (cache + refresh si vieux)
-  // Consensus communauté : best-effort, EN PARALLÈLE, non bloquant.
   if (outcome.ok) {
-    void fetchConsensus(ctx);
     void hydrateWatchlist(ctx); // (A5) pré-validation de l'appartenance watchlist
   }
 }
@@ -745,7 +703,6 @@ export function closeOverlay(opts?: { silent?: boolean }): void {
   root = null;
   ctxRef = null;
   snapRef = null;
-  consensusRef = null;
   creditsRef = null;
   creditsUnlimitedRef = false;
   watchedRef = null;

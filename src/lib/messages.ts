@@ -74,14 +74,6 @@ export interface DetectionStatusMsg {
   componentName: string | null;
   price: number | null;
 }
-export interface SubmitFlagMsg {
-  type: "SUBMIT_FLAG";
-  url: string; // hashée dans le SW -> ad_hash
-  platform: string;
-  component_id: number;
-  intent_type: string;
-  source?: string;
-}
 export interface AddWatchlistMsg {
   type: "ADD_WATCHLIST";
   payload: TargetRequest;
@@ -99,11 +91,6 @@ export interface ListWatchlistMsg {
 }
 export interface RefreshBalanceMsg {
   type: "REFRESH_BALANCE"; // GET /credits/balance via le SW (proxy strict) → met à jour le cache
-}
-export interface GetConsensusMsg {
-  type: "GET_CONSENSUS";
-  url: string; // hashée dans le SW -> ad_hash
-  platform: string;
 }
 // ── Filtrage pré-analyse (C2) ──
 export interface GetIntentRulesMsg {
@@ -134,13 +121,11 @@ export type WorkerMessage =
   | GetComponentDbMsg
   | UpdateCreditsMsg
   | DetectionStatusMsg
-  | SubmitFlagMsg
   | AddWatchlistMsg
   | RemoveWatchlistMsg
   | CheckWatchlistMsg
   | ListWatchlistMsg
   | RefreshBalanceMsg
-  | GetConsensusMsg
   | GetIntentRulesMsg
   | ReportIntentMsg;
 

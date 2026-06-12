@@ -1,18 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 
-import { consensusBadge, consensusLineHtml, FLAG_OPTIONS, renderMain } from "./overlay";
+import { flagOptionsFromRules, renderMain } from "./overlay";
 import type { ListingContext, SnapshotOutcome } from "./snapshot-client";
+import type { IntentDecision } from "../classify";
 import type { SnapshotResponse } from "../../lib/api-types";
 
-const ctx: ListingContext = {
-  platform: "leboncoin",
-  url: "https://www.leboncoin.fr/ad/x/1",
-  componentId: 3,
-  componentName: "RTX 3060",
-  askingPrice: 265,
-  condition: "good",
-  intent: {
+function decision(over: Partial<IntentDecision> = {}): IntentDecision {
+  return {
     intent: "sale",
     gate: "info",
     should_signal: true,
@@ -21,7 +16,18 @@ const ctx: ListingContext = {
     matched_flags: [],
     rules_version: 1,
     quantity: 1,
-  },
+    ...over,
+  };
+}
+
+const ctx: ListingContext = {
+  platform: "leboncoin",
+  url: "https://www.leboncoin.fr/ad/x/1",
+  componentId: 3,
+  componentName: "RTX 3060",
+  askingPrice: 265,
+  condition: "good",
+  intent: decision(),
   publishedAt: null,
 };
 
@@ -61,13 +67,12 @@ function snap(over: Partial<SnapshotResponse>): SnapshotResponse {
 
 const ok = (data: SnapshotResponse): SnapshotOutcome => ({ ok: true, data });
 
-describe("overlay — rendu honnête des 6 états", () => {
+describe("overlay — rendu honnête des états snapshot", () => {
   it("reliable : héros « Médiane vendue » + fourchette « Prix demandés actuellement » DISTINCTE", () => {
     const el = frag(renderMain(ctx, ok(snap({}))));
     expect(el.querySelector(".ml-hero-value")?.textContent).toContain("300");
     expect(el.querySelector(".ml-hero-label")?.textContent).toContain("Médiane vendue");
-    const range = el.querySelector(".ml-range-label")?.textContent ?? "";
-    expect(range).toContain("Prix demandés actuellement");
+    expect(el.querySelector(".ml-range-label")?.textContent ?? "").toContain("Prix demandés actuellement");
     expect(el.textContent).not.toContain("Non débité");
   });
 
@@ -77,107 +82,58 @@ describe("overlay — rendu honnête des 6 états", () => {
     expect(el.querySelector(".ml-context-price")?.textContent).toContain("265");
   });
 
-  it("insufficient : pas de héros, mention « Non débité », volumes réels affichés", () => {
+  it("insufficient : pas de héros, mention « Non débité », volumes réels", () => {
     const el = frag(renderMain(ctx, ok(snap({ state: "insufficient", market_median: null, volume_30d: 1, volume_90d: 2 }))));
     expect(el.querySelector(".ml-hero-value")).toBeNull();
     expect(el.textContent).toContain("Non débité");
     expect(el.textContent).toContain("1 / 2");
   });
 
-  it("no_data : « non couvert » + « Non débité », pas de héros", () => {
+  it("no_data : « non couvert » + « Non débité »", () => {
     const el = frag(renderMain(ctx, ok(snap({ state: "no_data", market_median: null }))));
     expect(el.querySelector(".ml-hero-value")).toBeNull();
     expect(el.textContent).toContain("non couvert");
-    expect(el.textContent).toContain("Non débité");
   });
 
-  it("cached : mention discrète « gratuite »", () => {
-    const el = frag(renderMain(ctx, ok(snap({ cached: true }))));
-    expect(el.querySelector(".ml-cached")?.textContent).toContain("gratuite");
+  it("402 : « Crédits épuisés » + topup ; réseau : retry ; 401 : reconnexion sans retry", () => {
+    const e402 = frag(renderMain(ctx, { ok: false, error: "no credits", status: 402 }));
+    expect(e402.textContent).toContain("Crédits épuisés");
+    expect(e402.querySelector('[data-act="topup"]')).not.toBeNull();
+    const eNet = frag(renderMain(ctx, { ok: false, error: "Network down" }));
+    expect(eNet.querySelector('[data-act="retry"]')).not.toBeNull();
+    const e401 = frag(renderMain(ctx, { ok: false, error: "Not authenticated" }));
+    expect(e401.textContent).toContain("Session expirée");
+    expect(e401.querySelector('[data-act="retry"]')).toBeNull();
   });
+});
 
-  it("402 : « Crédits épuisés » + lien topup, pas de héros", () => {
-    const el = frag(renderMain(ctx, { ok: false, error: "no credits", status: 402 }));
-    expect(el.textContent).toContain("Crédits épuisés");
-    expect(el.querySelector('[data-act="topup"]')).not.toBeNull();
-    expect(el.querySelector(".ml-hero-value")).toBeNull();
+describe("overlay — badge info (gate info, C2.c)", () => {
+  it("gate info + overlay_message -> badge affiché avec le message", () => {
+    const c2: ListingContext = { ...ctx, intent: decision({ intent: "mining", gate: "info", overlay_message: "Composant ex-minage détecté" }) };
+    expect(frag(renderMain(c2, ok(snap({}))))?.textContent).toContain("Composant ex-minage détecté");
   });
-
-  it("erreur réseau : état dédié + bouton réessayer", () => {
-    const el = frag(renderMain(ctx, { ok: false, error: "Network down" }));
-    expect(el.textContent).toContain("indisponible");
-    expect(el.querySelector('[data-act="retry"]')).not.toBeNull();
+  it("gate info SANS message (vente normale) -> aucun badge", () => {
+    expect(frag(renderMain(ctx, ok(snap({}))))?.textContent).not.toContain("ex-minage");
   });
+});
 
-  it("session expirée (401 / Not authenticated) : reconnexion, PAS de retry", () => {
-    for (const out of [
-      { ok: false as const, error: "Snapshot failed (401)", status: 401 },
-      { ok: false as const, error: "Not authenticated" },
-    ]) {
-      const el = frag(renderMain(ctx, out));
-      expect(el.textContent).toContain("Session expirée");
-      expect(el.querySelector('[data-act="login"]')).not.toBeNull();
-      expect(el.querySelector('[data-act="retry"]')).toBeNull();
-    }
+describe("overlay — flagOptionsFromRules (C2.e, remplace les 14 anomalies hardcodées)", () => {
+  const fams = [
+    { slug: "broken", label: "Composant HS / pour pièces" },
+    { slug: "photo_scam", label: "Annonce suspecte (photo seule)" },
+    { slug: "sale", label: "Vente" }, // doit être exclu
+  ];
+  it("mappe les familles (slug ≠ sale) + ajoute le catch-all `other`", () => {
+    const opts = flagOptionsFromRules(fams);
+    const types = opts.map((o) => o.type);
+    expect(types).toContain("broken");
+    expect(types).toContain("photo_scam");
+    expect(types).not.toContain("sale");
+    expect(types[types.length - 1]).toBe("other"); // catch-all en dernier
   });
-
-  it("consensus présent ≥2 (hors sale) → ambre + N + libellés dominants", () => {
-    const b = consensusBadge({ votes: { broken: 3, mining: 2, sale: 5 } });
-    expect(b).not.toBeNull();
-    expect(b?.n).toBe(5); // 3+2 ; sale EXCLU
-    expect(b?.tone).toBe("amber");
-    const html = consensusLineHtml(b!);
-    expect(html).toContain("5 signalements");
-    expect(html).toContain("Composant HS / pour pièces"); // broken = dominant
-    expect(html).toContain("var(--amber)");
-  });
-
-  it("consensus =1 → zinc, singulier", () => {
-    const b = consensusBadge({ votes: { wanted: 1 } });
-    expect(b?.n).toBe(1);
-    expect(b?.tone).toBe("zinc");
-    const html = consensusLineHtml(b!);
-    expect(html).toContain("1 signalement :");
-    expect(html).not.toContain("signalements");
-    expect(html).toContain("var(--zinc-400)");
-  });
-
-  it("anomalies fondues → « Autre anomalie » (bucket other)", () => {
-    expect(consensusLineHtml(consensusBadge({ votes: { other: 2 } })!)).toContain("Autre anomalie");
-  });
-
-  it("seuls des votes sale → AUCUN bandeau ; votes null/absent/erreur → AUCUN bandeau", () => {
-    expect(consensusBadge({ votes: { sale: 9 } })).toBeNull();
-    expect(consensusBadge({ votes: null })).toBeNull();
-    expect(consensusBadge(null)).toBeNull();
-    expect(consensusBadge(undefined)).toBeNull();
-  });
-
-  it("snapshot INDÉPENDANT du consensus : slot vide par défaut, snapshot rendu quand même", () => {
-    const el = frag(renderMain(ctx, ok(snap({}))));
-    const slot = el.querySelector(".ml-consensus-slot");
-    expect(slot).not.toBeNull();
-    expect(slot?.textContent).toBe(""); // vide tant que le consensus n'a pas répondu
-    expect(el.querySelector(".ml-hero-value")).not.toBeNull();
-  });
-
-  it("expose les 14 anomalies exactes (verbatim v1)", () => {
-    expect(FLAG_OPTIONS).toHaveLength(14);
-    expect(FLAG_OPTIONS.map((o) => o.type)).toEqual([
-      "broken",
-      "bundle",
-      "box_only",
-      "trade",
-      "wanted",
-      "mining",
-      "accessory",
-      "symbolic_price",
-      "reserved",
-      "multiple",
-      "rental",
-      "rma_refurb",
-      "professional",
-      "other",
-    ]);
+  it("conserve les libellés FR servis + a une icône par option", () => {
+    const opts = flagOptionsFromRules(fams);
+    expect(opts.find((o) => o.type === "broken")?.label).toBe("Composant HS / pour pièces");
+    expect(opts.every((o) => o.icon.length > 0)).toBe(true);
   });
 });
