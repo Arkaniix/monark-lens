@@ -36,3 +36,19 @@ export function decodeJwtExp(token: string): number | null {
     return null;
   }
 }
+
+/**
+ * Single-flight (LOT D §6) : déduplique les appels CONCURRENTS d'une tâche async.
+ * Tant qu'un appel est en vol, les suivants partagent la MÊME promesse — empêche le SW
+ * de lancer deux refresh simultanés (qui s'auto-révoqueraient le refresh ROTATIF).
+ */
+export function createSingleFlight<T>(): (task: () => Promise<T>) => Promise<T> {
+  let inFlight: Promise<T> | null = null;
+  return (task) => {
+    if (inFlight) return inFlight;
+    inFlight = task().finally(() => {
+      inFlight = null;
+    });
+    return inFlight;
+  };
+}

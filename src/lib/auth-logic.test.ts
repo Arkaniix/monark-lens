@@ -1,6 +1,36 @@
 import { describe, expect, it } from "vitest";
 
-import { decodeJwtExp, nextBackoff, shouldRefresh } from "./auth-logic";
+import { createSingleFlight, decodeJwtExp, nextBackoff, shouldRefresh } from "./auth-logic";
+
+describe("createSingleFlight — dédup concurrente (LOT D §6)", () => {
+  it("deux appels concurrents partagent UNE exécution", async () => {
+    const sf = createSingleFlight<number>();
+    let calls = 0;
+    let resolve!: (v: number) => void;
+    const task = () => {
+      calls++;
+      return new Promise<number>((r) => {
+        resolve = r;
+      });
+    };
+    const p1 = sf(task);
+    const p2 = sf(task);
+    expect(calls).toBe(1); // une seule exécution en vol
+    resolve(7);
+    expect(await p1).toBe(7);
+    expect(await p2).toBe(7);
+  });
+  it("après résolution, un nouvel appel ré-exécute", async () => {
+    const sf = createSingleFlight<number>();
+    let calls = 0;
+    const task = () => {
+      calls++;
+      return Promise.resolve(calls);
+    };
+    expect(await sf(task)).toBe(1);
+    expect(await sf(task)).toBe(2); // in-flight nettoyé -> ré-exécute
+  });
+});
 
 describe("shouldRefresh — refresh proactif à expiry−60s", () => {
   it("faux si expiry null", () => {
