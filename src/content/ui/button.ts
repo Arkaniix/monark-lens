@@ -73,8 +73,7 @@ export function mountAnalyzeButton(ctx: ListingContext): void {
   const { root: r, isNew } = ensureHost();
   r.innerHTML =
     `<div class="ml-btn${isNew ? "" : " ml-in"}" role="button" tabindex="0">` +
-    `<span class="ml-btn-logo">◎</span><span class="ml-btn-label">Analyser</span>` +
-    `<span class="ml-btn-cost">· 1 cr</span></div>`;
+    `<span class="ml-btn-logo">◎</span><span class="ml-btn-label">Analyser</span></div>`;
   const btn = r.firstElementChild as HTMLElement;
   if (isNew) requestAnimationFrame(() => btn.classList.add("ml-in"));
 

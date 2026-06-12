@@ -688,7 +688,7 @@ async function onConfirmNo(): Promise<void> {
   await cacheDecision(ctx.url, "overridden");
   void reportDecision(ctx, "auto_overridden", "sale");
   if (ctxRef !== ctx) return;
-  // Override => snapshot normal (1 cr) dans le même overlay.
+  // Override => snapshot normal (gratuit depuis B1) dans le même overlay.
   setView(
     `<div class="ml-overlay">${headerHtml()}${contextHtml(ctx, null)}` +
       `<div class="ml-note"><span class="ml-note-title">Analyse…</span><div class="ml-spinner"></div></div></div>`,
