@@ -453,7 +453,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
 // ── Bridge auth SW -> onglets monark-market.fr ──
 
-async function broadcastAuthToSiteTabs(): Promise<void> {
+async function broadcastAuthToSiteTabs(reason: "rotate" | "login" | "logout"): Promise<void> {
   try {
     const t = await getStoredTokens();
     const { user_email } = await getState(["user_email"]);
@@ -464,6 +464,7 @@ async function broadcastAuthToSiteTabs(): Promise<void> {
     });
     const msg: SyncTokensToSiteMsg = {
       action: "SYNC_TOKENS_TO_SITE",
+      reason, // (LOT D) le content discrimine rotate (silencieux) vs login/logout (reload)
       access_token: t.access_token,
       refresh_token: t.refresh_token,
       email: user_email ?? null,
@@ -529,7 +530,7 @@ async function handleMessage(msg: WorkerMessage): Promise<unknown> {
         } catch {
           /* best-effort */
         }
-        await broadcastAuthToSiteTabs();
+        await broadcastAuthToSiteTabs("login");
         return getAuthState();
       } catch (err) {
         return { error: err instanceof Error ? err.message : String(err) };
@@ -538,7 +539,7 @@ async function handleMessage(msg: WorkerMessage): Promise<unknown> {
     case "LOGOUT":
       await clearTokens();
       await setState({ session_signals_count: 0, session_credits_earned: 0 });
-      await broadcastAuthToSiteTabs();
+      await broadcastAuthToSiteTabs("logout");
       return { success: true };
 
     case "SYNC_TOKENS_FROM_SITE":

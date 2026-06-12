@@ -142,9 +142,23 @@ export type WorkerMessage =
 // SW -> content (sur les onglets monark-market.fr) : note `action`, pas `type`.
 export interface SyncTokensToSiteMsg {
   action: "SYNC_TOKENS_TO_SITE";
+  // (LOT D) raison EXPLICITE de l'émission : le SW sait pourquoi (rotate=rotation silencieuse,
+  // login/logout=bascule d'état). Le content discrimine via reason, jamais par inférence.
+  reason: "rotate" | "login" | "logout";
   access_token: string | null;
   refresh_token: string | null;
   email: string | null;
+}
+
+// SW -> content : demande de lecture du localStorage du site (guérison 401, LOT D §5).
+// Le content répond { access_token, refresh_token }.
+export interface GetSiteTokensMsg {
+  action: "GET_SITE_TOKENS";
+}
+
+export interface SiteTokens {
+  access_token: string | null;
+  refresh_token: string | null;
 }
 
 export interface AuthState {

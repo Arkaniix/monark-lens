@@ -7,7 +7,8 @@
 
 import { analyze, resetCollectState } from "./collect";
 import { loadComponentDb } from "./detect";
-import type { SyncTokensToSiteMsg } from "../lib/messages";
+import { decideSiteWrite, fresher, jwtClaims } from "./auth-bridge";
+import type { GetSiteTokensMsg, SyncTokensToSiteMsg } from "../lib/messages";
 
 const EXTENSION_VERSION = "2.1.0";
 
@@ -22,6 +23,22 @@ function isSiteHost(): boolean {
   return h === "monark-market.fr" || h === "www.monark-market.fr";
 }
 
+async function pushSiteToExt(siteAccess: string | null): Promise<void> {
+  await chrome.runtime.sendMessage({
+    type: "SYNC_TOKENS_FROM_SITE",
+    access_token: siteAccess ?? "",
+    refresh_token: siteAccess ? localStorage.getItem(SITE_REFRESH_KEY) : null,
+  });
+  lastKnownSiteToken = siteAccess; // évite que le poll re-pousse la même valeur au SW
+}
+
+function adoptExtTokens(extAccess: string, extRefresh: string | null | undefined, reloadIfNeeded: boolean): void {
+  localStorage.setItem(SITE_ACCESS_KEY, extAccess);
+  if (extRefresh) localStorage.setItem(SITE_REFRESH_KEY, extRefresh);
+  lastKnownSiteToken = extAccess;
+  if (reloadIfNeeded) window.location.reload();
+}
+
 async function initialSync(): Promise<void> {
   if (syncInProgress) return;
   syncInProgress = true;
@@ -31,18 +48,19 @@ async function initialSync(): Promise<void> {
       access_token?: string | null;
       refresh_token?: string | null;
     };
-    const extHasToken = !!ext?.access_token;
-    const siteHasToken = !!siteToken;
-    if (siteHasToken && !extHasToken) {
-      await chrome.runtime.sendMessage({
-        type: "SYNC_TOKENS_FROM_SITE",
-        access_token: siteToken,
-        refresh_token: localStorage.getItem(SITE_REFRESH_KEY),
-      });
-    } else if (extHasToken && !siteHasToken && ext.access_token) {
-      localStorage.setItem(SITE_ACCESS_KEY, ext.access_token);
-      if (ext.refresh_token) localStorage.setItem(SITE_REFRESH_KEY, ext.refresh_token);
-      window.location.reload();
+    const extAccess = ext?.access_token ?? null;
+    if (siteToken && !extAccess) {
+      await pushSiteToExt(siteToken); // site connecté, ext non -> pousser au SW
+    } else if (extAccess && !siteToken) {
+      adoptExtTokens(extAccess, ext.refresh_token, true); // ext connecté, site non -> reload (login)
+    } else if (siteToken && extAccess && siteToken !== extAccess) {
+      // (§4) les deux présents mais DIFFÉRENTS -> adopter le plus récent (par exp).
+      if (fresher(siteToken, extAccess) === "site") {
+        await pushSiteToExt(siteToken);
+      } else {
+        const sameSub = jwtClaims(siteToken).sub != null && jwtClaims(siteToken).sub === jwtClaims(extAccess).sub;
+        adoptExtTokens(extAccess, ext.refresh_token, !sameSub); // identité différente -> reload
+      }
     }
   } catch (err) {
     console.warn("[Monark] Initial auth sync failed:", err);
@@ -52,17 +70,21 @@ async function initialSync(): Promise<void> {
 }
 
 function handleExtensionToSite(message: SyncTokensToSiteMsg): void {
-  if (message.access_token) {
-    localStorage.setItem(SITE_ACCESS_KEY, message.access_token);
-    if (message.refresh_token) localStorage.setItem(SITE_REFRESH_KEY, message.refresh_token);
-    lastKnownSiteToken = message.access_token;
-  } else {
+  // (LOT D §1/§2) la décision est PILOTÉE par message.reason (explicite), avec garde-fou sub.
+  const action = decideSiteWrite(message.reason, localStorage.getItem(SITE_ACCESS_KEY), message.access_token);
+  if (action === "clear") {
     localStorage.removeItem(SITE_ACCESS_KEY);
     localStorage.removeItem(SITE_REFRESH_KEY);
     lastKnownSiteToken = null;
+    window.location.reload();
+    return;
   }
-  // Écart v1 (E3) : write localStorage + reload seulement (drop CustomEvent + StorageEvent).
-  window.location.reload();
+  if (message.access_token) localStorage.setItem(SITE_ACCESS_KEY, message.access_token);
+  if (message.refresh_token) localStorage.setItem(SITE_REFRESH_KEY, message.refresh_token);
+  lastKnownSiteToken = message.access_token; // évite le ping-pong poll → SW
+  // action === "silent" (rotation, même session) : AUCUN reload — le site lit le token live et
+  // l'adopte seul. action === "reload" (login / bascule de sub) : recharger pour rafraîchir l'état.
+  if (action === "reload") window.location.reload();
 }
 
 async function checkSiteAuthChanged(): Promise<void> {
@@ -90,14 +112,31 @@ function initAuthSync(): void {
   // Ping de présence (E5) — non consommé par le site à ce jour (futur CTA install).
   window.postMessage({ type: "MONARK_LENS_INSTALLED", version: EXTENSION_VERSION }, "*");
   void initialSync();
-  chrome.runtime.onMessage.addListener((message: SyncTokensToSiteMsg, _sender, sendResponse) => {
-    if (message.action === "SYNC_TOKENS_TO_SITE") {
-      handleExtensionToSite(message);
-      sendResponse({ success: true });
-    }
-    return false;
-  });
+  chrome.runtime.onMessage.addListener(
+    (message: SyncTokensToSiteMsg | GetSiteTokensMsg, _sender, sendResponse) => {
+      if (message.action === "SYNC_TOKENS_TO_SITE") {
+        handleExtensionToSite(message);
+        sendResponse({ success: true });
+      } else if (message.action === "GET_SITE_TOKENS") {
+        // (§5) guérison : le SW lit notre localStorage AVANT de déconnecter.
+        sendResponse({
+          access_token: localStorage.getItem(SITE_ACCESS_KEY),
+          refresh_token: localStorage.getItem(SITE_REFRESH_KEY),
+        });
+      }
+      return false;
+    },
+  );
   lastKnownSiteToken = localStorage.getItem(SITE_ACCESS_KEY);
+  // (§3) propagation site → ext immédiate : 'storage' (autres onglets) + retour au focus/visibilité.
+  // Le filet poll 2 s reste car le MÊME onglet n'émet PAS 'storage' (refresh du site in-tab).
+  window.addEventListener("storage", (e) => {
+    if (e.key === SITE_ACCESS_KEY || e.key === SITE_REFRESH_KEY) void checkSiteAuthChanged();
+  });
+  window.addEventListener("focus", () => void checkSiteAuthChanged());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void checkSiteAuthChanged();
+  });
   setInterval(() => void checkSiteAuthChanged(), 2000);
 }
 
