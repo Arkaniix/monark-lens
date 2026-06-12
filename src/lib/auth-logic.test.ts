@@ -1,6 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import { createSingleFlight, decodeJwtExp, nextBackoff, shouldRefresh } from "./auth-logic";
+import {
+  createSingleFlight,
+  decodeJwtExp,
+  nextBackoff,
+  shouldAdoptSiteRefresh,
+  shouldRefresh,
+} from "./auth-logic";
+
+describe("shouldAdoptSiteRefresh — guérison 401 (LOT D §5)", () => {
+  it("site refresh présent ET différent -> adopter", () => {
+    expect(shouldAdoptSiteRefresh("old", "new")).toBe(true);
+  });
+  it("identique -> ne pas adopter (même paire, inutile)", () => {
+    expect(shouldAdoptSiteRefresh("same", "same")).toBe(false);
+  });
+  it("site absent -> ne pas adopter", () => {
+    expect(shouldAdoptSiteRefresh("old", null)).toBe(false);
+    expect(shouldAdoptSiteRefresh("old", undefined)).toBe(false);
+    expect(shouldAdoptSiteRefresh(null, null)).toBe(false);
+  });
+});
 
 describe("createSingleFlight — dédup concurrente (LOT D §6)", () => {
   it("deux appels concurrents partagent UNE exécution", async () => {

@@ -18,7 +18,13 @@ import {
   INTENT_RULES_TTL,
 } from "../lib/constants";
 import { canonicalAdHash } from "../lib/adhash";
-import { decodeJwtExp, nextBackoff, shouldRefresh } from "../lib/auth-logic";
+import {
+  createSingleFlight,
+  decodeJwtExp,
+  nextBackoff,
+  shouldAdoptSiteRefresh,
+  shouldRefresh,
+} from "../lib/auth-logic";
 import { nextRulesPatch } from "../lib/intent-rules-logic";
 import { ensureDefaults, getState, setState } from "../lib/storage";
 import type {
@@ -39,9 +45,11 @@ import type {
 } from "../lib/api-types";
 import type {
   AuthState,
+  GetSiteTokensMsg,
   GetVerdictMsg,
   ReportIntentMsg,
   SendSignalMsg,
+  SiteTokens,
   SyncTokensToSiteMsg,
   WorkerMessage,
 } from "../lib/messages";
@@ -95,25 +103,73 @@ async function clearTokens(): Promise<void> {
   invalidateWatchlist(); // le solde et l'appartenance watchlist ne valent plus pour ce compte
 }
 
-async function refreshAccessToken(): Promise<string | null> {
-  const { refresh_token } = await getStoredTokens();
-  if (!refresh_token) return null;
+// (LOT D) refresh ROTATIF avec single-flight (§6), guérison sur 401 (§5) et write-back
+// silencieux de la nouvelle paire au site (§1). Le 401 distingué du transitoire (réseau/5xx)
+// pour ne JAMAIS déconnecter sur une erreur passagère.
+type RefreshResult = { kind: "ok"; access: string } | { kind: "invalid" } | { kind: "network" };
+
+async function _attemptRefresh(refresh: string): Promise<RefreshResult> {
   try {
     const res = await fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token }),
+      body: JSON.stringify({ refresh_token: refresh }),
     });
-    if (!res.ok) {
-      if (res.status === 401) await clearTokens();
-      return null;
-    }
+    if (res.status === 401) return { kind: "invalid" }; // refresh révoqué
+    if (!res.ok) return { kind: "network" }; // 5xx/429/… transitoire -> ne pas déconnecter
     const tokens = (await res.json()) as AuthTokens;
     await storeTokens(tokens);
-    return tokens.access_token;
+    await broadcastAuthToSiteTabs("rotate"); // (§1) write-back silencieux au site
+    return { kind: "ok", access: tokens.access_token };
+  } catch {
+    return { kind: "network" };
+  }
+}
+
+// (§5) Lit le localStorage d'un onglet site ouvert (guérison avant déconnexion).
+async function readSiteTokens(): Promise<SiteTokens | null> {
+  try {
+    const tabs = await chrome.tabs.query({
+      url: ["https://monark-market.fr/*", "https://www.monark-market.fr/*"],
+    });
+    for (const tab of tabs) {
+      if (!tab.id) continue;
+      try {
+        const msg: GetSiteTokensMsg = { action: "GET_SITE_TOKENS" };
+        const r = (await chrome.tabs.sendMessage(tab.id, msg)) as SiteTokens | undefined;
+        if (r && (r.access_token || r.refresh_token)) return r;
+      } catch {
+        /* onglet pas prêt / pas de listener */
+      }
+    }
+    return null;
   } catch {
     return null;
   }
+}
+
+const _refreshSingleFlight = createSingleFlight<string | null>();
+
+async function refreshAccessToken(): Promise<string | null> {
+  return _refreshSingleFlight(async () => {
+    const { refresh_token } = await getStoredTokens();
+    if (!refresh_token) return null;
+    const first = await _attemptRefresh(refresh_token);
+    if (first.kind === "ok") return first.access;
+    if (first.kind === "network") return null; // transitoire : garder la session, retry plus tard
+    // first.kind === "invalid" (401) : refresh révoqué. (§5) le site a-t-il rotaté entre-temps ?
+    const site = await readSiteTokens();
+    const siteRefresh = site?.refresh_token ?? null;
+    if (siteRefresh && shouldAdoptSiteRefresh(refresh_token, siteRefresh)) {
+      await storeTokensFromSite(site?.access_token ?? "", siteRefresh);
+      const healed = await _attemptRefresh(siteRefresh);
+      if (healed.kind === "ok") return healed.access;
+    }
+    // Vraiment mort -> logout + propagation au site (§2).
+    await clearTokens();
+    await broadcastAuthToSiteTabs("logout");
+    return null;
+  });
 }
 
 async function getValidToken(): Promise<string | null> {

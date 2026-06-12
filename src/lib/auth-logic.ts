@@ -38,6 +38,17 @@ export function decodeJwtExp(token: string): number | null {
 }
 
 /**
+ * (LOT D §5) Guérison sur 401 : adopter le refresh du site UNIQUEMENT s'il est présent ET
+ * DIFFÉRENT (le site a rotaté pendant que notre refresh devenait révoqué). Sinon inutile.
+ */
+export function shouldAdoptSiteRefresh(
+  currentRefresh: string | null,
+  siteRefresh: string | null | undefined,
+): boolean {
+  return !!siteRefresh && siteRefresh !== currentRefresh;
+}
+
+/**
  * Single-flight (LOT D §6) : déduplique les appels CONCURRENTS d'une tâche async.
  * Tant qu'un appel est en vol, les suivants partagent la MÊME promesse — empêche le SW
  * de lancer deux refresh simultanés (qui s'auto-révoqueraient le refresh ROTATIF).
