@@ -3,8 +3,9 @@
 // bouton — aucun badge, aucun overlay spontané. Le bouton est le SEUL ajout à la page.
 
 import { injectStyles } from "./styles";
-import { openOverlay } from "./overlay";
+import { openConfirmOverlay, openFilteredOverlay, openOverlay } from "./overlay";
 import { requestSnapshot } from "./snapshot-client";
+import { getCachedDecision } from "../decision-cache";
 import type { ListingContext } from "./snapshot-client";
 import type { IntentGate } from "../../lib/api-types";
 
@@ -94,14 +95,36 @@ async function onClick(ctx: ListingContext, btn: HTMLElement): Promise<void> {
   btn.setAttribute("aria-disabled", "true");
   btn.innerHTML = `<span class="ml-spinner"></span><span class="ml-btn-label">Analyse…</span>`;
 
+  const onClose = (): void => mountAnalyzeButton(ctx);
+
+  // (C2.c) gate `confirm` : AUCUN snapshot avant résolution. (C2.d) cache consulté AVANT le gate.
+  if (ctx.intent.gate === "confirm") {
+    const cached = await getCachedDecision(ctx.url);
+    if (location.href !== navUrl) {
+      loading = false;
+      return;
+    }
+    if (cached === "confirmed") {
+      removeAnalyzeButton();
+      openFilteredOverlay(ctx, { onClose }); // overlay filtré direct, AUCUN snapshot ni re-POST
+      return;
+    }
+    if (cached !== "overridden") {
+      removeAnalyzeButton();
+      openConfirmOverlay(ctx, { onClose }); // gate de confirmation (aucun snapshot)
+      return;
+    }
+    // cached === "overridden" -> snapshot direct (bloc commun ci-dessous, pas de re-POST)
+  }
+
+  // gate `info` (sale/mining/rma_refurb/professional/reserved/aberration) OU confirm+overridden :
+  // snapshot normal. Le bouton garde le spinner pendant l'appel.
   const outcome = await requestSnapshot(ctx);
-  // Si l'utilisateur a navigué (SPA) pendant l'appel, on ABANDONNE : pas d'overlay spontané
-  // pour l'annonce précédente, pas de re-montage d'un bouton hors contexte (garde-fou faux-match).
+  // Nav SPA pendant l'appel -> ABANDON (pas d'overlay hors contexte, garde-fou faux-match).
   if (location.href !== navUrl) {
     loading = false;
     return;
   }
-  // Le bouton s'efface au profit de l'overlay ; il sera re-monté à la fermeture.
-  removeAnalyzeButton();
-  openOverlay(ctx, outcome, { onClose: () => mountAnalyzeButton(ctx) });
+  removeAnalyzeButton(); // le bouton s'efface au profit de l'overlay ; re-monté à la fermeture
+  openOverlay(ctx, outcome, { onClose });
 }

@@ -9,6 +9,7 @@ import { icon } from "../../ui/icons";
 import { buildEstimateUrl } from "../../ui/deeplink";
 import { requestSnapshot } from "./snapshot-client";
 import type { ListingContext, SnapshotOutcome } from "./snapshot-client";
+import { cacheDecision } from "../decision-cache";
 import type { ConsensusResponse, SnapshotResponse } from "../../lib/api-types";
 import type {
   AddWatchlistMsg,
@@ -16,6 +17,7 @@ import type {
   GetConsensusMsg,
   RefreshBalanceMsg,
   RemoveWatchlistMsg,
+  ReportIntentMsg,
   SubmitFlagMsg,
 } from "../../lib/messages";
 
@@ -264,6 +266,15 @@ function errorBodyHtml(outcome: { error: string; status?: number }): string {
   );
 }
 
+/** (C2.c) Badge discret pour le gate `info` : contexte non bloquant + chiffres affichés. */
+function infoBadgeHtml(ctx: ListingContext): string {
+  if (ctx.intent.gate !== "info" || !ctx.intent.overlay_message) return "";
+  return (
+    `<div class="ml-note" style="color:var(--amber)">` +
+    `${icon("alert-triangle")} ${esc(ctx.intent.overlay_message)}</div>`
+  );
+}
+
 export function renderMain(ctx: ListingContext, outcome: SnapshotOutcome): string {
   let body: string;
   let actions = "";
@@ -283,6 +294,7 @@ export function renderMain(ctx: ListingContext, outcome: SnapshotOutcome): strin
     headerHtml() +
     contextHtml(ctx, outcome.ok ? outcome.data : null) +
     `<div class="ml-consensus-slot">${consensusRef ? consensusLineHtml(consensusRef) : ""}</div>` +
+    infoBadgeHtml(ctx) +
     body +
     actions +
     footerHtml() +
@@ -525,18 +537,8 @@ async function fetchConsensus(ctx: ListingContext): Promise<void> {
 
 // ── cycle de vie ───────────────────────────────────────────────────────────
 
-/** Ouvre l'overlay résultat. Remplace tout overlay existant. */
-export function openOverlay(ctx: ListingContext, outcome: SnapshotOutcome, opts: { onClose: () => void }): void {
-  closeOverlay({ silent: true });
-  ctxRef = ctx;
-  snapRef = outcome.ok ? outcome.data : null;
-  consensusRef = null;
-  creditsRef = outcome.ok ? outcome.data.credits_remaining : null;
-  creditsUnlimitedRef = false;
-  watchedRef = null;
-  watchTouched = false;
-  onCloseCb = opts.onClose;
-
+/** Crée le host (shadow closed, top-right) + styles + handlers Échap / clic-hors. */
+function setupHostAndHandlers(): void {
   hostEl = document.createElement("div");
   hostEl.id = HOST_ID;
   hostEl.style.cssText = "position:fixed;top:80px;right:16px;z-index:2147483600;";
@@ -546,15 +548,6 @@ export function openOverlay(ctx: ListingContext, outcome: SnapshotOutcome, opts:
   root.className = "ml-root";
   shadow.appendChild(root);
   document.body.appendChild(hostEl);
-
-  showMainView(outcome);
-  void hydrateCredits(outcome); // (A4) solde header sur TOUS les états (cache + refresh si vieux)
-  // Consensus communauté : best-effort, EN PARALLÈLE, non bloquant. Le snapshot est déjà
-  // affiché ; le bandeau s'injecte si/quand il arrive (seulement sur snapshot OK).
-  if (outcome.ok) {
-    void fetchConsensus(ctx);
-    void hydrateWatchlist(ctx); // (A5) pré-validation de l'appartenance watchlist
-  }
 
   docKeyHandler = (e: KeyboardEvent) => {
     if (e.key === "Escape") closeOverlay();
@@ -567,6 +560,176 @@ export function openOverlay(ctx: ListingContext, outcome: SnapshotOutcome, opts:
   setTimeout(() => {
     if (docClickHandler) document.addEventListener("click", docClickHandler);
   }, 0);
+}
+
+function resetRefs(ctx: ListingContext, onClose: () => void): void {
+  ctxRef = ctx;
+  snapRef = null;
+  consensusRef = null;
+  creditsRef = null;
+  creditsUnlimitedRef = false;
+  watchedRef = null;
+  watchTouched = false;
+  onCloseCb = onClose;
+}
+
+/** Rapport de décision (C2). Auth-gated : non connecté => POST sauté SILENCIEUSEMENT (v1). */
+async function reportDecision(
+  ctx: ListingContext,
+  userAction: "auto_confirmed" | "auto_overridden" | "manual_flag",
+  finalIntent: string,
+): Promise<void> {
+  try {
+    const authState = await send<{ isLoggedIn?: boolean }>({ type: "GET_AUTH_STATE" });
+    if (!authState?.isLoggedIn) return;
+    const msg: ReportIntentMsg = {
+      type: "REPORT_INTENT",
+      url: ctx.url,
+      platform: ctx.platform,
+      component_id: ctx.componentId,
+      detected_intent: ctx.intent.intent,
+      final_intent: finalIntent,
+      user_action: userAction,
+      matched_flags: ctx.intent.matched_flags,
+      asking_price: ctx.askingPrice,
+      rules_version: ctx.intent.rules_version,
+    };
+    await send(msg);
+  } catch {
+    /* best-effort */
+  }
+}
+
+// ── Gate de confirmation (C2.c) ─────────────────────────────────────────────
+
+const TRIGGER_ORIGIN: Record<string, string> = { title: "titre", desc: "description", price: "prix" };
+
+/** Déclencheurs lisibles depuis matched_flags (origine + extrait), max 4. */
+function triggersHtml(flags: string[]): string {
+  const items = flags
+    .slice(0, 4)
+    .map((f) => {
+      const parts = f.split(":");
+      const origin = TRIGGER_ORIGIN[parts[0]] ?? parts[0];
+      const extract = parts.slice(2).join(":");
+      return (
+        `<div class="ml-line"><span class="ml-line-k">${esc(origin)}</span>` +
+        `<span class="ml-line-v">« ${esc(extract)} »</span></div>`
+      );
+    })
+    .join("");
+  return items ? `<div class="ml-card">${items}</div>` : "";
+}
+
+function renderConfirmView(ctx: ListingContext): string {
+  const label = ctx.intent.label || "annonce spéciale";
+  return (
+    `<div class="ml-overlay">` +
+    headerHtml() +
+    contextHtml(ctx, null) +
+    `<div class="ml-note"><span class="ml-note-title">Vérification nécessaire</span>` +
+    `${esc(ctx.intent.overlay_message || "Annonce non standard détectée")} — est-ce bien le cas ?</div>` +
+    triggersHtml(ctx.intent.matched_flags) +
+    `<div class="ml-actions">` +
+    `<button class="ml-act ml-act-primary" data-act="confirm-yes">✓ Oui, c'est bien « ${esc(label)} »</button>` +
+    `<button class="ml-act" data-act="confirm-no">${icon("bar-chart")} Non, vente normale — voir les chiffres</button>` +
+    `</div>` +
+    footerHtml() +
+    `</div>`
+  );
+}
+
+function renderFilteredView(ctx: ListingContext): string {
+  const cta = ctx.componentId
+    ? `<div class="ml-actions"><button class="ml-act ml-act-primary" data-act="estimate">` +
+      `${icon("bar-chart")} Estimation complète →</button></div>`
+    : "";
+  return (
+    `<div class="ml-overlay">` +
+    headerHtml() +
+    contextHtml(ctx, null) +
+    `<div class="ml-note"><span class="ml-note-title">${esc(ctx.intent.label || "Annonce filtrée")}</span>` +
+    `${esc(ctx.intent.overlay_message || "Annonce filtrée")}` +
+    `<span class="ml-nodebit">Non comptabilisée dans les stats marché</span></div>` +
+    cta +
+    footerHtml() +
+    `</div>`
+  );
+}
+
+function showFilteredView(): void {
+  if (!ctxRef) return;
+  setView(renderFilteredView(ctxRef));
+  $('[data-act="estimate"]')?.addEventListener("click", onEstimate);
+}
+
+async function onConfirmYes(): Promise<void> {
+  if (!ctxRef) return;
+  const ctx = ctxRef;
+  await cacheDecision(ctx.url, "confirmed");
+  void reportDecision(ctx, "auto_confirmed", ctx.intent.intent);
+  if (ctxRef !== ctx) return;
+  showFilteredView();
+}
+
+async function onConfirmNo(): Promise<void> {
+  if (!ctxRef) return;
+  const ctx = ctxRef;
+  await cacheDecision(ctx.url, "overridden");
+  void reportDecision(ctx, "auto_overridden", "sale");
+  if (ctxRef !== ctx) return;
+  // Override => snapshot normal (1 cr) dans le même overlay.
+  setView(
+    `<div class="ml-overlay">${headerHtml()}${contextHtml(ctx, null)}` +
+      `<div class="ml-note"><span class="ml-note-title">Analyse…</span><div class="ml-spinner"></div></div></div>`,
+  );
+  const outcome = await requestSnapshot(ctx);
+  if (ctxRef !== ctx) return;
+  snapRef = outcome.ok ? outcome.data : null;
+  creditsRef = outcome.ok ? outcome.data.credits_remaining : null;
+  showMainView(outcome);
+  void hydrateCredits(outcome);
+  if (outcome.ok) void hydrateWatchlist(ctx);
+}
+
+function showConfirmView(): void {
+  if (!ctxRef) return;
+  setView(renderConfirmView(ctxRef));
+  $('[data-act="confirm-yes"]')?.addEventListener("click", onConfirmYes);
+  $('[data-act="confirm-no"]')?.addEventListener("click", onConfirmNo);
+}
+
+/** Ouvre directement l'overlay FILTRÉ (décision « confirmé » tranchée — aucun snapshot). */
+export function openFilteredOverlay(ctx: ListingContext, opts: { onClose: () => void }): void {
+  closeOverlay({ silent: true });
+  resetRefs(ctx, opts.onClose);
+  setupHostAndHandlers();
+  showFilteredView();
+}
+
+/** Ouvre le gate de CONFIRMATION (aucun snapshot tant que l'utilisateur n'a pas tranché). */
+export function openConfirmOverlay(ctx: ListingContext, opts: { onClose: () => void }): void {
+  closeOverlay({ silent: true });
+  resetRefs(ctx, opts.onClose);
+  setupHostAndHandlers();
+  showConfirmView();
+}
+
+/** Ouvre l'overlay résultat. Remplace tout overlay existant. */
+export function openOverlay(ctx: ListingContext, outcome: SnapshotOutcome, opts: { onClose: () => void }): void {
+  closeOverlay({ silent: true });
+  resetRefs(ctx, opts.onClose);
+  snapRef = outcome.ok ? outcome.data : null;
+  creditsRef = outcome.ok ? outcome.data.credits_remaining : null;
+  setupHostAndHandlers();
+
+  showMainView(outcome);
+  void hydrateCredits(outcome); // (A4) solde header sur TOUS les états (cache + refresh si vieux)
+  // Consensus communauté : best-effort, EN PARALLÈLE, non bloquant.
+  if (outcome.ok) {
+    void fetchConsensus(ctx);
+    void hydrateWatchlist(ctx); // (A5) pré-validation de l'appartenance watchlist
+  }
 }
 
 /** Ferme l'overlay et (sauf silent) re-déclenche le bouton via onClose. */
