@@ -79,7 +79,6 @@ let creditsUnlimitedRef = false;
 let watchedRef: boolean | null = null; // (A5) appartenance watchlist (null = inconnu)
 let watchTouched = false; // (A5) l'utilisateur a déjà togglé cette session → hydrate ne clobbe plus
 let docKeyHandler: ((e: KeyboardEvent) => void) | null = null;
-let docClickHandler: ((e: MouseEvent) => void) | null = null;
 
 function send<T = unknown>(msg: unknown): Promise<T> {
   return chrome.runtime.sendMessage(msg) as Promise<T>;
@@ -124,7 +123,7 @@ function contextHtml(ctx: ListingContext, snap: SnapshotResponse | null): string
 
 function footerHtml(): string {
   // (A4) Solde déplacé en header (visible tous états) → footer = version seule, pas de doublon.
-  return `<div class="ml-footer"><span class="ml-footer-ver">Monark Lens v2.2.0</span></div>`;
+  return `<div class="ml-footer"><span class="ml-footer-ver">Monark Lens v2.2.1</span></div>`;
 }
 
 /** (A5) Bouton Watchlist selon l'appartenance pré-validée (✓ = suivi, clic = toggle). */
@@ -548,7 +547,7 @@ async function onRetry(): Promise<void> {
 
 // ── cycle de vie ───────────────────────────────────────────────────────────
 
-/** Crée le host (shadow closed, top-right) + styles + handlers Échap / clic-hors. */
+/** Crée le host (shadow closed, top-right) + styles + handler Échap (fermeture croix/Échap). */
 function setupHostAndHandlers(): void {
   hostEl = document.createElement("div");
   hostEl.id = HOST_ID;
@@ -560,17 +559,12 @@ function setupHostAndHandlers(): void {
   shadow.appendChild(root);
   document.body.appendChild(hostEl);
 
+  // Fermeture par la croix (data-act="close") ou Échap UNIQUEMENT. Pas de clic-hors :
+  // l'overlay reste ouvert tant que l'utilisateur ne le ferme pas explicitement.
   docKeyHandler = (e: KeyboardEvent) => {
     if (e.key === "Escape") closeOverlay();
   };
-  docClickHandler = (e: MouseEvent) => {
-    // shadow closed → un clic interne a pour target le host ; un clic externe ferme.
-    if (hostEl && e.target !== hostEl && !hostEl.contains(e.target as Node)) closeOverlay();
-  };
   document.addEventListener("keydown", docKeyHandler);
-  setTimeout(() => {
-    if (docClickHandler) document.addEventListener("click", docClickHandler);
-  }, 0);
 }
 
 function resetRefs(ctx: ListingContext, onClose: () => void): void {
@@ -743,9 +737,7 @@ export function openOverlay(ctx: ListingContext, outcome: SnapshotOutcome, opts:
 /** Ferme l'overlay et (sauf silent) re-déclenche le bouton via onClose. */
 export function closeOverlay(opts?: { silent?: boolean }): void {
   if (docKeyHandler) document.removeEventListener("keydown", docKeyHandler);
-  if (docClickHandler) document.removeEventListener("click", docClickHandler);
   docKeyHandler = null;
-  docClickHandler = null;
   hostEl?.remove();
   const cb = onCloseCb;
   hostEl = null;

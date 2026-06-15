@@ -43,6 +43,39 @@ describe("matchComponent — pièges suffixes (le plus long/spécifique gagne, D
   }
 });
 
+// D4 — fixture aux NOMS DE PROD (préfixe « GeForce » + suffixe « 12GB » sur la base) : c'est
+// le SEUL cas qui reproduit le faux « Ti » (l'égalité exacte bare-name ci-dessus masque le bug).
+const PROD: ComponentDbEntry[] = [
+  { id: 10, name: "GeForce RTX 3060 12GB", category: "gpu", aliases: ["3060", "rtx 3060"] },
+  { id: 11, name: "GeForce RTX 3060 Ti", category: "gpu", aliases: ["3060 ti", "rtx 3060 ti"] },
+  { id: 12, name: "GeForce RTX 3080", category: "gpu", aliases: ["3080", "rtx 3080"] },
+  { id: 13, name: "GeForce RTX 3080 Ti", category: "gpu", aliases: ["3080 ti", "rtx 3080 ti"] },
+  { id: 14, name: "GeForce RTX 4070", category: "gpu", aliases: ["4070", "rtx 4070"] },
+  { id: 15, name: "GeForce RTX 4070 SUPER", category: "gpu", aliases: ["4070 super"] },
+  { id: 16, name: "GeForce RTX 4070 Ti", category: "gpu", aliases: ["4070 ti"] },
+];
+const PROD_VARIANT_FIRST: ComponentDbEntry[] = [...PROD].reverse();
+
+const PROD_CASES: ReadonlyArray<readonly [string, number]> = [
+  ["MSI RTX 3080 gaming Z trio 10Go", 12], // base, PAS Ti (le bug rapporté)
+  ["RTX 3060 Ti 8GB", 11], // Ti, PAS base
+  ["RTX 4070 Dual OC 12Go", 14], // base, PAS Super/Ti
+  ["ASUS RTX 4070 Super 12G", 15], // Super, PAS base/Ti
+];
+
+describe("matchComponent — D4 noms de prod (plus petit sur-ensemble, pas de faux Ti/Super)", () => {
+  for (const [label, db] of [["prod-base-first", PROD], ["prod-variant-first", PROD_VARIANT_FIRST]] as const) {
+    describe(`ordre DB: ${label}`, () => {
+      beforeEach(() => setComponentDb(db));
+      for (const [title, expectedId] of PROD_CASES) {
+        it(`"${title}" -> #${expectedId}`, () => {
+          expect(matchComponent(title)?.componentId).toBe(expectedId);
+        });
+      }
+    });
+  }
+});
+
 describe("normalize — colle suffixes/préfixes + accents", () => {
   it("RTX 3060 Ti -> rtx3060ti", () => expect(normalize("RTX 3060 Ti")).toBe("rtx3060ti"));
   it("RX 6600 XT -> rx6600xt", () => expect(normalize("RX 6600 XT")).toBe("rx6600xt"));

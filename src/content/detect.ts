@@ -158,26 +158,42 @@ export function matchComponent(title: string): MatchResult | null {
     }
   }
   // GPU regex — filet de sécurité (toujours évalué).
-  // DÉVIATION v1 ASSUMÉE (LENS-V2-02) : v1 prenait le PREMIER match bidirectionnel `includes`,
-  // ce qui est DÉPENDANT DE L'ORDRE de la component_db — « RTX 3060 Ti » pouvait être écrasé en
-  // « RTX 3060 » si la base était listée avant (= faux match facturé). Pour garantir « le plus
-  // long/spécifique gagne » de façon DÉTERMINISTE, on choisit d'abord l'égalité EXACTE du nom
-  // normalisé avec le modèle extrait, sinon la plus LONGUE correspondance bidirectionnelle.
-  // Le scoring/override v1 (gpuScore = len×3) est conservé.
+  // CORRECTIF D4 (faux « Ti ») : la règle v1 « le nom catalogue le plus LONG gagne » est À
+  // L'ENVERS quand le token extrait est la BASE — « rtx3080 » matche bidirectionnellement
+  // « geforcertx3080 » ET « geforcertx3080ti », et « le plus long » choisit le Ti (sur-spéc.).
+  // Désormais, de façon DÉTERMINISTE : (1) égalité EXACTE du token GPU (nom complet OU « cœur »
+  // débarrassé du préfixe de marque) ; sinon (2) le PLUS PETIT sur-ensemble (longueur la plus
+  // proche du token) en REJETANT tout nom portant un suffixe (ti/super/xt/xtx) ABSENT du token.
+  // extractGpuModel capture déjà le suffixe modèle-signifiant. Scoring/override v1 conservé.
   const gpuModel = extractGpuModel(title);
   if (gpuModel) {
     const normalizedGpu = normalize(gpuModel);
-    let gpuComponent: ComponentDbEntry | null =
-      componentDb.find((c) => normalize(c.name) === normalizedGpu) ?? null;
+    const SUFFIX_RE = /(tisuper|super|ti|xtx|xt)$/;
+    const tokenSuffix = (normalizedGpu.match(SUFFIX_RE) ?? [""])[0];
+    const coreOf = (nn: string): string =>
+      nn.replace(/^(?:nvidia|geforce|amd|radeon|intel|arc)+/, "");
+
+    let gpuComponent: ComponentDbEntry | null = null;
+    // (1) égalité EXACTE du token (nom complet OU cœur sans marque).
+    for (const c of componentDb) {
+      const nn = normalize(c.name);
+      if (nn === normalizedGpu || coreOf(nn) === normalizedGpu) {
+        gpuComponent = c;
+        break;
+      }
+    }
+    // (2) à défaut : plus petit sur-ensemble (longueur la plus proche), suffixe étranger rejeté.
     if (!gpuComponent) {
-      let bestLen = -1;
+      let bestDelta = Infinity;
       for (const c of componentDb) {
-        const nn = normalize(c.name);
-        if (nn.includes(normalizedGpu) || normalizedGpu.includes(nn)) {
-          if (nn.length > bestLen) {
-            gpuComponent = c;
-            bestLen = nn.length;
-          }
+        const core = coreOf(normalize(c.name));
+        if (!(core.includes(normalizedGpu) || normalizedGpu.includes(core))) continue;
+        const coreSuffix = (core.match(SUFFIX_RE) ?? [""])[0];
+        if (coreSuffix && coreSuffix !== tokenSuffix) continue; // rejette rtx3080 -> rtx3080ti
+        const delta = Math.abs(core.length - normalizedGpu.length);
+        if (delta < bestDelta) {
+          gpuComponent = c;
+          bestDelta = delta;
         }
       }
     }
