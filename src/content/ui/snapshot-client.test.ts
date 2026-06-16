@@ -21,6 +21,7 @@ const ctx: ListingContext = {
     quantity: 1,
   },
   publishedAt: null,
+  title: "MSI RTX 3060 12GB",
 };
 
 type ChromeLike = { runtime: { sendMessage: (m: unknown) => Promise<unknown> } };
@@ -63,5 +64,20 @@ describe("requestSnapshot — forward du status (402/401 doivent rester atteigna
     const r = await requestSnapshot(ctx);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toContain("boom");
+  });
+
+  it("forwarde le titre live au SW (override VRAM serveur 2C)", async () => {
+    let sent: { type?: string; title?: string } | undefined;
+    setChrome({
+      runtime: {
+        sendMessage: (m: unknown) => {
+          sent = m as { type?: string; title?: string };
+          return Promise.resolve({ ad_hash: "h", state: "reliable", credits_remaining: 5 });
+        },
+      },
+    });
+    await requestSnapshot(ctx);
+    expect(sent?.type).toBe("GET_SNAPSHOT");
+    expect(sent?.title).toBe("MSI RTX 3060 12GB");
   });
 });

@@ -39,6 +39,7 @@ describe("mount / remove bouton passif", () => {
     condition: "good",
     intent: decision,
     publishedAt: null,
+    title: "RTX 3060",
   };
 
   it("monte un host unique (idempotent) et le retire proprement", () => {

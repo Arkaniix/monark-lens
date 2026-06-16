@@ -16,6 +16,7 @@ export interface ListingContext {
   condition: string | null;
   intent: IntentDecision; // décision de filtrage (gate / label / overlay_message / flags / rules_version)
   publishedAt: string | null; // date de publication (LBC uniquement) pour le deep-link estimateur
+  title: string; // titre live de l'annonce (= celui envoyé à /signals/ingest) → override VRAM serveur 2C
 }
 
 export type SnapshotOutcome =
@@ -31,6 +32,7 @@ export async function requestSnapshot(ctx: ListingContext): Promise<SnapshotOutc
     asking_price: ctx.askingPrice,
     platform: ctx.platform,
     condition: ctx.condition,
+    title: ctx.title, // override VRAM serveur (2C) — pas de résolution VRAM client
   };
   try {
     const res = (await chrome.runtime.sendMessage(msg)) as

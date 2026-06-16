@@ -263,6 +263,7 @@ async function getSnapshot(
   askingPrice: number,
   platform: string,
   condition: string | null,
+  title: string | null = null,
 ): Promise<SnapshotResponse> {
   const ad_hash = await canonicalAdHash(url);
   const body: Record<string, unknown> = {
@@ -272,6 +273,8 @@ async function getSnapshot(
     platform,
   };
   if (condition) body["condition"] = condition;
+  // Titre live → override VRAM serveur (2C). In-request only ; le SW n'envoie jamais l'URL.
+  if (title) body["title"] = title;
   const res = await apiCall("/lens/snapshot", { method: "POST", body: JSON.stringify(body) }, true);
   if (!res.ok) {
     // On PROPAGE le status HTTP (comme postTarget) : l'overlay V2-03 distingue 402
@@ -293,6 +296,8 @@ async function getVerdict(msg: GetVerdictMsg): Promise<VerdictResponse> {
   };
   if (msg.condition) body["condition"] = msg.condition;
   if (msg.listing_age_days != null) body["listing_age_days"] = msg.listing_age_days;
+  // Titre live → override VRAM serveur (2C). In-request only.
+  if (msg.title) body["title"] = msg.title;
   const res = await apiCall("/lens/verdict", { method: "POST", body: JSON.stringify(body) }, true);
   if (!res.ok) {
     // Propage le status HTTP (comme getSnapshot) : l'overlay distingue 402 / 401 / réseau.
@@ -625,7 +630,7 @@ async function handleMessage(msg: WorkerMessage): Promise<unknown> {
 
     case "GET_SNAPSHOT": {
       try {
-        const result = await getSnapshot(msg.url, msg.component_id, msg.asking_price, msg.platform, msg.condition ?? null);
+        const result = await getSnapshot(msg.url, msg.component_id, msg.asking_price, msg.platform, msg.condition ?? null, msg.title ?? null);
         await setState({ credits_remaining: result.credits_remaining, credits_updated_at: Date.now() });
         return result;
       } catch (err) {

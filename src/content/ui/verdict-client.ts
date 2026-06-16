@@ -52,6 +52,7 @@ export function buildVerdictMsg(ctx: ListingContext): GetVerdictMsg {
     component_id: ctx.componentId,
     asking_price: ctx.askingPrice,
     platform: mapPlatform(ctx.platform),
+    title: ctx.title, // override VRAM serveur (2C) — pas de résolution VRAM client
   };
   const cond = mapCondition(ctx.condition);
   if (cond) msg.condition = cond;

@@ -12,7 +12,7 @@ function ctx(over: Partial<ListingContext> = {}): ListingContext {
   return {
     platform: "leboncoin", url: "https://www.leboncoin.fr/ad/x/1", componentId: 3,
     componentName: "RTX 3060", askingPrice: 265, condition: "good", intent: DEC,
-    publishedAt: null, ...over,
+    publishedAt: null, title: "MSI RTX 3060 12GB", ...over,
   };
 }
 
@@ -80,5 +80,11 @@ describe("verdict-client — buildVerdictMsg", () => {
   it("condition null -> champ condition absent", () => {
     const m = buildVerdictMsg(ctx({ condition: null }));
     expect("condition" in m).toBe(false);
+  });
+  it("forwarde le titre live (override VRAM serveur 2C) — aucune résolution VRAM client", () => {
+    const m = buildVerdictMsg(ctx({ title: "MSI RTX 3080 10 Go Gaming" }));
+    expect(m.title).toBe("MSI RTX 3080 10 Go Gaming");
+    // le component_id reste celui résolu côté extension : c'est le serveur qui override
+    expect(m.component_id).toBe(3);
   });
 });

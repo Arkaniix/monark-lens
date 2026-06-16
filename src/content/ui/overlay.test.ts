@@ -29,6 +29,7 @@ const ctx: ListingContext = {
   condition: "good",
   intent: decision(),
   publishedAt: null,
+  title: "RTX 3060",
 };
 
 function frag(html: string): HTMLElement {

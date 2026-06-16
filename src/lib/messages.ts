@@ -39,6 +39,7 @@ export interface GetSnapshotMsg {
   asking_price: number;
   platform: string;
   condition?: string | null;
+  title?: string; // titre live → override VRAM serveur (2C) ; backend in-request only, jamais persisté
 }
 export interface SendSignalMsg {
   type: "SEND_SIGNAL";
@@ -104,6 +105,7 @@ export interface GetVerdictMsg {
   platform: string;
   condition?: string;
   listing_age_days?: number;
+  title?: string; // titre live → override VRAM serveur (2C) ; backend in-request only, jamais persisté
 }
 export interface ReportIntentMsg {
   type: "REPORT_INTENT"; // -> POST /v1/lens/intent-report (l'URL est hashée -> ad_hash SW-side)

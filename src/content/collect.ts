@@ -130,6 +130,7 @@ async function analyzeInner(): Promise<void> {
       condition: listing.condition,
       intent: decision,
       publishedAt: listing.publishedAt,
+      title: listing.title, // réutilise le titre live déjà extrait (cf. SEND_SIGNAL) → override VRAM serveur 2C
     };
     mountAnalyzeButton(ctx);
   } else {
