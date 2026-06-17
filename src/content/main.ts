@@ -8,9 +8,10 @@
 import { analyze, resetCollectState } from "./collect";
 import { loadComponentDb } from "./detect";
 import { decideSiteWrite, fresher, jwtClaims } from "./auth-bridge";
+import { CONTENT_VERSION } from "./version";
 import type { GetSiteTokensMsg, SyncTokensToSiteMsg } from "../lib/messages";
 
-const EXTENSION_VERSION = "2.2.1";
+const EXTENSION_VERSION = CONTENT_VERSION;
 
 // ── (A) Bridge auth site monark-market.fr ↔ extension ──────────────────────
 const SITE_ACCESS_KEY = "monark_access_token";

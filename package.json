@@ -1,12 +1,12 @@
 {
   "name": "monark-lens",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "type": "module",
   "description": "Monark Lens — extension Chrome (réécriture v2, TS strict + Vite, MV3)",
   "scripts": {
     "dev": "vite build --watch --mode development",
-    "build": "node scripts/check-token-sync.mjs && tsc --noEmit && vite build",
+    "build": "node scripts/check-token-sync.mjs && node scripts/check-version-sync.mjs && tsc --noEmit && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
     "zip": "python3 scripts/zip.py"
