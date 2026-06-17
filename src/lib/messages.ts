@@ -107,6 +107,17 @@ export interface GetVerdictMsg {
   listing_age_days?: number;
   title?: string; // titre live → override VRAM serveur (2C) ; backend in-request only, jamais persisté
 }
+export interface GetBundleMsg {
+  type: "GET_BUNDLE"; // -> POST /v1/lens/bundle (l'URL est hashée -> ad_hash SW-side). Le serveur
+  // RÉSOUT les composants depuis title+description → PAS de component_id ici. total_price = prix du LOT.
+  url: string;
+  total_price: number;
+  platform: string;
+  condition?: string;
+  listing_age_days?: number;
+  title?: string; // titre live ; in-request only, jamais persisté ni loggé (L.341-1)
+  description?: string; // description live (compo du lot) ; in-request only, jamais persistée ni loggée (L.341-1)
+}
 export interface ReportIntentMsg {
   type: "REPORT_INTENT"; // -> POST /v1/lens/intent-report (l'URL est hashée -> ad_hash SW-side)
   url: string;
@@ -139,7 +150,8 @@ export type WorkerMessage =
   | RefreshBalanceMsg
   | GetIntentRulesMsg
   | ReportIntentMsg
-  | GetVerdictMsg;
+  | GetVerdictMsg
+  | GetBundleMsg;
 
 // SW -> content (sur les onglets monark-market.fr) : note `action`, pas `type`.
 export interface SyncTokensToSiteMsg {

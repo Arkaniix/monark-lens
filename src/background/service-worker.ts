@@ -29,6 +29,7 @@ import { nextRulesPatch } from "../lib/intent-rules-logic";
 import { ensureDefaults, getState, setState } from "../lib/storage";
 import type {
   AuthTokens,
+  BundleResponse,
   ComponentDbResponse,
   CreditsBalance,
   IntentReportRequest,
@@ -45,6 +46,7 @@ import type {
 } from "../lib/api-types";
 import type {
   AuthState,
+  GetBundleMsg,
   GetSiteTokensMsg,
   GetVerdictMsg,
   ReportIntentMsg,
@@ -306,6 +308,28 @@ async function getVerdict(msg: GetVerdictMsg): Promise<VerdictResponse> {
     throw err;
   }
   return (await res.json()) as VerdictResponse;
+}
+
+async function getBundle(msg: GetBundleMsg): Promise<BundleResponse> {
+  const ad_hash = await canonicalAdHash(msg.url);
+  const body: Record<string, unknown> = {
+    ad_hash,
+    total_price: msg.total_price, // prix du LOT (≠ asking_price mono)
+    platform: msg.platform,
+  };
+  if (msg.condition) body["condition"] = msg.condition;
+  if (msg.listing_age_days != null) body["listing_age_days"] = msg.listing_age_days;
+  // Titre + description live → résolution serveur des composants. In-request only ; le SW
+  // n'envoie jamais l'URL ; rien n'est loggé. Garde-fou 422 : description bornée à 4000 (max backend).
+  if (msg.title) body["title"] = msg.title;
+  if (msg.description) body["description"] = msg.description.slice(0, 4000);
+  const res = await apiCall("/lens/bundle", { method: "POST", body: JSON.stringify(body) }, true);
+  if (!res.ok) {
+    const err = new Error(await detailError(res, `Bundle failed (${res.status})`)) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
+  return (await res.json()) as BundleResponse;
 }
 
 async function sendSignal(msg: SendSignalMsg): Promise<SignalIngestResponse> {
@@ -644,6 +668,19 @@ async function handleMessage(msg: WorkerMessage): Promise<unknown> {
       try {
         const result = await getVerdict(msg);
         // (A4) persiste le solde renvoyé par le verdict -> header à jour après chaque estimation.
+        await setState({ credits_remaining: result.credits_remaining, credits_updated_at: Date.now() });
+        return result;
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        const error = err instanceof Error ? err.message : String(err);
+        return status === undefined ? { error } : { error, status };
+      }
+    }
+
+    case "GET_BUNDLE": {
+      try {
+        const result = await getBundle(msg);
+        // persiste le solde (comme verdict) -> header solde à jour après l'analyse de lot.
         await setState({ credits_remaining: result.credits_remaining, credits_updated_at: Date.now() });
         return result;
       } catch (err) {

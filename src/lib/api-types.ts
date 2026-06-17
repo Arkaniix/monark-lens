@@ -236,3 +236,39 @@ export interface VerdictResponse {
   credits_remaining: number;
   cached: boolean;
 }
+
+// ── Bundle verdict (POST /v1/lens/bundle) — Phase A backend, consommé en Phase B ──
+export interface BundleComponentLine {
+  component_id: number;
+  component_name: string | null;
+  category: string | null;
+  status: string; // ok | no_data (reconnu mais sans ancre marché)
+  median: number | null;
+  fair_value: number | null;
+  confidence: number | null;
+}
+
+export interface BundleAnalysisBlock {
+  sum_individual_fair_values: number | null;
+  bundle_discount_pct: number | null;
+  bundle_fair_value: number | null;
+  total_price: number;
+  price_vs_bundle_fair_pct: number | null;
+  savings_vs_individual_eur: number | null;
+  savings_vs_individual_pct: number | null;
+}
+
+export interface BundleResponse {
+  ad_hash: string;
+  state: string; // ok | insufficient | no_data
+  cached: boolean;
+  components: BundleComponentLine[];
+  bundle_analysis: BundleAnalysisBlock | null;
+  unrecognized_categories: string[]; // catégories détectées non valorisées → total = plancher
+  verdict: string | null; // BUY | NEGOTIATE | LOWBALL | AVOID (global, sur le total)
+  verdict_label: string | null;
+  confidence_state: string; // sufficient | insufficient
+  warnings: string[]; // disclaimer + plancher inclus — JAMAIS hardcodé côté extension
+  credits_charged: number;
+  credits_remaining: number;
+}

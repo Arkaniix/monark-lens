@@ -17,6 +17,9 @@ export interface ListingContext {
   intent: IntentDecision; // décision de filtrage (gate / label / overlay_message / flags / rules_version)
   publishedAt: string | null; // date de publication (LBC uniquement) pour le deep-link estimateur
   title: string; // titre live de l'annonce (= celui envoyé à /signals/ingest) → override VRAM serveur 2C
+  // description live (déjà parsée pour la classification) — utilisée UNIQUEMENT pour le verdict de
+  // lot (/lens/bundle, Phase B), in-request only, jamais loggée ni persistée (L.341-1).
+  description?: string | null;
 }
 
 export type SnapshotOutcome =

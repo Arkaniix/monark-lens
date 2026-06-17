@@ -131,6 +131,7 @@ async function analyzeInner(): Promise<void> {
       intent: decision,
       publishedAt: listing.publishedAt,
       title: listing.title, // réutilise le titre live déjà extrait (cf. SEND_SIGNAL) → override VRAM serveur 2C
+      description: listing.description, // (Phase B) déjà parsée ; envoyée UNIQUEMENT au verdict de lot, in-request only
     };
     mountAnalyzeButton(ctx);
   } else {
