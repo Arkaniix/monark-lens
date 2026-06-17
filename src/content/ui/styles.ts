@@ -179,6 +179,19 @@ const COMPONENT_CSS = `
 .ml-vd-warn div { display: flex; align-items: flex-start; gap: 5px; }
 .ml-vd-warn-strong { color: var(--amber); font-size: 12px; }
 .ml-vd-cost { color: var(--zinc-500); font-size: 10px; text-align: right; margin-top: 8px; }
+
+/* Bundle panel (Phase B) — lot/PC décomposé par composant */
+.ml-bd-list { padding: 4px 10px; }
+.ml-bd-comp { align-items: baseline; }
+.ml-bd-cat { font-family: var(--font-mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--zinc-500); margin-left: 6px; }
+.ml-bd-conf { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-left: 6px; vertical-align: middle; }
+.ml-bd-val { display: inline-flex; align-items: baseline; gap: 7px; }
+.ml-bd-med { color: var(--zinc-500); font-size: 10.5px; }
+.ml-bd-nodata { color: var(--zinc-500); font-style: italic; font-size: 11.5px; }
+/* Catégories détectées mais non valorisées → cadrage PLANCHER honnête (ton ambre, jamais rouge tranchant) */
+.ml-bd-unrec-box { border-left: 2px solid color-mix(in srgb, var(--amber) 45%, transparent); }
+.ml-bd-unrec { display: inline-block; margin: 5px 4px 0 0; padding: 2px 8px; border-radius: 999px; font-family: var(--font-mono); font-size: 10.5px; color: var(--amber); background: color-mix(in srgb, var(--amber) 10%, transparent); }
+.ml-bd-floor { color: var(--zinc-500); font-size: 11px; margin-top: 7px; line-height: 1.4; }
 `;
 
 /** Injecte tokens + polices + styles composant dans un shadow root. */

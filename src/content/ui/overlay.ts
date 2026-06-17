@@ -11,9 +11,13 @@ import { requestSnapshot } from "./snapshot-client";
 import type { ListingContext, SnapshotOutcome } from "./snapshot-client";
 import { requestVerdict } from "./verdict-client";
 import type { VerdictOutcome } from "./verdict-client";
+import { requestBundle } from "./bundle-client";
+import type { BundleOutcome } from "./bundle-client";
 import { verdictBodyHtml } from "./verdict-panel";
+import { bundleBodyHtml } from "./bundle-panel";
 import { cacheDecision } from "../decision-cache";
 import { getCompiledRules } from "../intent-rules-client";
+import { CONTENT_VERSION } from "../version";
 import type { SnapshotResponse } from "../../lib/api-types";
 import type {
   AddWatchlistMsg,
@@ -123,7 +127,8 @@ function contextHtml(ctx: ListingContext, snap: SnapshotResponse | null): string
 
 function footerHtml(): string {
   // (A4) Solde déplacé en header (visible tous états) → footer = version seule, pas de doublon.
-  return `<div class="ml-footer"><span class="ml-footer-ver">Monark Lens v2.2.1</span></div>`;
+  // Version via CONTENT_VERSION (un seul point de vérité content-side ; fin du hardcode raté).
+  return `<div class="ml-footer"><span class="ml-footer-ver">Monark Lens v${CONTENT_VERSION}</span></div>`;
 }
 
 /** (A5) Bouton Watchlist selon l'appartenance pré-validée (✓ = suivi, clic = toggle). */
@@ -396,6 +401,46 @@ function showVerdictView(outcome: VerdictOutcome): void {
   if (!outcome.ok) void hydrateCredits(outcome as SnapshotOutcome); // 402 -> refresh solde honnête
 }
 
+// (Phase B) Analyse de LOT/PC — déclenchée quand l'utilisateur confirme « c'est un lot ».
+async function onBundle(): Promise<void> {
+  if (!ctxRef) return;
+  const ctx = ctxRef;
+  setView(
+    `<div class="ml-overlay">${headerHtml()}${contextHtml(ctx, null)}` +
+      `<div class="ml-note"><span class="ml-note-title">Analyse du lot…</span><div class="ml-spinner"></div></div></div>`,
+  );
+  const outcome = await requestBundle(ctx); // title+description in-request (jamais loggés)
+  if (ctxRef !== ctx) return; // overlay fermé/changé pendant l'appel
+  showBundleView(outcome);
+}
+
+function showBundleView(outcome: BundleOutcome): void {
+  if (!ctxRef) return;
+  const ctx = ctxRef;
+  let body: string;
+  if (outcome.ok) {
+    body = bundleBodyHtml(outcome.data);
+    creditsRef = outcome.data.credits_remaining; // (A4) solde header à jour
+    creditsUnlimitedRef = false;
+  } else {
+    body = errorBodyHtml(outcome); // 402 / 401 / réseau (rendu existant réutilisé)
+  }
+  setView(
+    `<div class="ml-overlay">` +
+      headerHtml() +
+      contextHtml(ctx, null) +
+      body +
+      `<div class="ml-actions"><button class="ml-act" data-act="bd-retry">↻ Réessayer l'analyse du lot</button></div>` +
+      footerHtml() +
+      `</div>`,
+  );
+  paintCredits();
+  $('[data-act="bd-retry"]')?.addEventListener("click", onBundle); // réseau -> réessayer le lot
+  $('[data-act="topup"]')?.addEventListener("click", () => openWeb("/pricing"));
+  $('[data-act="login"]')?.addEventListener("click", () => openWeb(""));
+  if (!outcome.ok) void hydrateCredits(outcome as SnapshotOutcome); // 402 -> refresh solde honnête
+}
+
 function onEstimate(): void {
   if (!ctxRef) return;
   const url = buildEstimateUrl({
@@ -627,6 +672,12 @@ function triggersHtml(flags: string[]): string {
 
 function renderConfirmView(ctx: ListingContext): string {
   const label = ctx.intent.label || "annonce spéciale";
+  // (Phase B) Pour un lot/PC, le « Oui » devient une ACTION (analyser le lot par composant)
+  // au lieu d'une simple confirmation menant à une vue morte.
+  const yesLabel =
+    ctx.intent.intent === "bundle"
+      ? `${icon("layers")} Oui, analyser le lot →`
+      : `✓ Oui, c'est bien « ${esc(label)} »`;
   return (
     `<div class="ml-overlay">` +
     headerHtml() +
@@ -635,7 +686,7 @@ function renderConfirmView(ctx: ListingContext): string {
     `${esc(ctx.intent.overlay_message || "Annonce non standard détectée")} — est-ce bien le cas ?</div>` +
     triggersHtml(ctx.intent.matched_flags) +
     `<div class="ml-actions">` +
-    `<button class="ml-act ml-act-primary" data-act="confirm-yes">✓ Oui, c'est bien « ${esc(label)} »</button>` +
+    `<button class="ml-act ml-act-primary" data-act="confirm-yes">${yesLabel}</button>` +
     `<button class="ml-act" data-act="confirm-no">${icon("bar-chart")} Non, vente normale — voir les chiffres</button>` +
     `</div>` +
     footerHtml() +
@@ -673,6 +724,12 @@ async function onConfirmYes(): Promise<void> {
   await cacheDecision(ctx.url, "confirmed");
   void reportDecision(ctx, "auto_confirmed", ctx.intent.intent);
   if (ctxRef !== ctx) return;
+  // (Phase B) un LOT/PC confirmé → on l'ANALYSE par composant (au lieu de la vue filtrée morte).
+  // Les autres intents `confirm` (wanted/trade/broken/multiple/…) gardent la vue filtrée.
+  if (ctx.intent.intent === "bundle") {
+    await onBundle();
+    return;
+  }
   showFilteredView();
 }
 
