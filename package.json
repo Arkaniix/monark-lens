@@ -1,6 +1,6 @@
 {
   "name": "monark-lens",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "private": true,
   "type": "module",
   "description": "Monark Lens — extension Chrome (réécriture v2, TS strict + Vite, MV3)",
