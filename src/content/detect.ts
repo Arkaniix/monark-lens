@@ -218,6 +218,93 @@ export function matchComponent(title: string): MatchResult | null {
   return bestMatch;
 }
 
+function isAlnum(ch: string): boolean {
+  return (ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9");
+}
+
+// Inclusion BORNÉE-MOT : `needle` (déjà normalisé) ne matche que si la sous-chaîne est flanquée d'un
+// non-alphanumérique (espace) ou d'un bord de chaîne des DEUX côtés. Empêche un token catalogue de
+// matcher À L'INTÉRIEUR d'un run plus long : « 2700 » dans « 2700x »/« 12700kf », « rtx4070 » dans
+// « rtx4070super ». Le texte normalisé n'ayant que [a-z0-9 ], « frontière » = espace ou bord.
+function includesAsToken(haystack: string, needle: string): boolean {
+  if (!needle) return false;
+  let from = 0;
+  while (from <= haystack.length) {
+    const i = haystack.indexOf(needle, from);
+    if (i === -1) return false;
+    const end = i + needle.length;
+    if ((i === 0 || !isAlnum(haystack[i - 1])) && (end >= haystack.length || !isAlnum(haystack[end]))) {
+      return true;
+    }
+    from = i + 1;
+  }
+  return false;
+}
+
+// Multi-scan : tous les composants DISTINCTS présents dans `text` (repli description LBC, cf.
+// collect.ts). MÊME normalisation + MÊME scoring que matchComponent (exact_name = len×2, alias = len,
+// alias ≥ 3), mais DEUX durcissements PROPRES au repli (texte libre ≠ titre court) :
+//   • inclusion BORNÉE-MOT (includesAsToken) au lieu de String.includes() brut — un alias « 5600 »
+//     ne matche plus dans « ddr5 5600 mhz », et « amd ryzen 7 2700 » ne matche plus dans « …2700x »
+//     (suivi de 'x') → le 2700X seul reste 1 famille, mais « 2700 ET 2700x » fait 2 familles.
+//   • DROP des alias purement numériques (/^\d+$/) — supprime les collisions fréquences/capacités.
+// Puis COLLAPSE des familles de MÊME catégorie par containment BORNÉ-MOT du token : « samsung 970 evo »
+// ⊂ « samsung 970 evo plus » → 1 famille (variante espace-séparée) ; « …2700 » ⊄ « …2700x » car non
+// borné → 2 familles (lot non collé). `.length` = nb de composants distincts. PAS de filet GPU regex
+// (matchComponent only) : ce repli ne sert qu'à la garde d'unicité, biais vers le SILENCE.
+export function matchAllComponents(text: string): MatchResult[] {
+  if (!componentDb.length) return [];
+  const normalizedText = normalize(text);
+  // (1) un hit par composant : meilleur token (nom prioritaire par le score×2, sinon alias),
+  // inclusion bornée-mot, alias purement numériques ignorés.
+  type Hit = MatchResult & { token: string };
+  const hits: Hit[] = [];
+  for (const component of componentDb) {
+    let best: Hit | null = null;
+    const normalizedName = normalize(component.name);
+    if (normalizedName && includesAsToken(normalizedText, normalizedName)) {
+      best = {
+        componentId: component.id,
+        componentName: component.name,
+        category: component.category ?? "",
+        matchScore: normalizedName.length * 2,
+        matchType: "exact_name",
+        token: normalizedName,
+      };
+    }
+    if (component.aliases) {
+      for (const alias of component.aliases) {
+        const normalizedAlias = normalize(alias);
+        if (/^\d+$/.test(normalizedAlias)) continue; // alias nu → matcherait dans n'importe quel nombre
+        if (normalizedAlias.length >= 3 && includesAsToken(normalizedText, normalizedAlias)) {
+          const score = normalizedAlias.length;
+          if (!best || score > best.matchScore) {
+            best = {
+              componentId: component.id,
+              componentName: component.name,
+              category: component.category ?? "",
+              matchScore: score,
+              matchType: "alias",
+              token: normalizedAlias,
+            };
+          }
+        }
+      }
+    }
+    if (best) hits.push(best);
+  }
+  // (2) collapse familles, SCOPÉ par catégorie + containment BORNÉ-MOT : retirer un hit seulement si
+  // un autre hit de MÊME catégorie, au token strictement plus long, le contient comme token borné
+  // (sur-ensemble = composant le plus spécifique → survivant/représentant).
+  const survivors = hits.filter(
+    (h) =>
+      !hits.some(
+        (o) => o.category === h.category && o.token.length > h.token.length && includesAsToken(o.token, h.token),
+      ),
+  );
+  return survivors.map(({ token: _token, ...m }) => m);
+}
+
 export function findVariantName(componentId: number, title: string): string | null {
   const component = componentDb.find((c) => c.id === componentId);
   if (!component?.aliases?.length) return null;

@@ -4,7 +4,7 @@
 import { classifyWithRules } from "./classify";
 import type { IntentDecision } from "./classify";
 import { extractDefects } from "./defects";
-import { detectPlatform, findVariantName, isComponentDbLoaded, loadComponentDb, matchComponent } from "./detect";
+import { detectPlatform, findVariantName, isComponentDbLoaded, loadComponentDb, matchAllComponents, matchComponent } from "./detect";
 import { getCompiledRules } from "./intent-rules-client";
 import { extractListingData, isHardwareCategory } from "./parsers";
 import {
@@ -99,6 +99,18 @@ async function analyzeInner(): Promise<void> {
       return;
     }
     match = matchComponent(listing.title);
+  }
+  // Repli description (LBC) : titre générique sans modèle → le modèle peut n'exister QUE dans la
+  // description (ex. titre « Processeur AMD », desc « …Ryzen 7 2700x… »). Garde de scope IMPÉRATIVE :
+  // ne s'arme QUE pour LBC et QUE si le titre n'a RIEN matché (un bon match titre ne doit jamais être
+  // écrasé par du bruit de description). N'adopte un match QUE si la description désigne UN SEUL
+  // composant distinct ; ≥ 2 (bundle) ou 0 → on NE devine JAMAIS lequel est vendu → silence.
+  if (!match && detection.platform === "leboncoin" && listing.description) {
+    const distinct = matchAllComponents(listing.description);
+    if (distinct.length === 1) {
+      match = distinct[0];
+      console.log(`[Monark] Repli description → ${match.componentName} (#${match.componentId})`);
+    }
   }
   if (!match || listing.price === null) {
     removeAnalyzeButton(); // retire le placeholder si présent
