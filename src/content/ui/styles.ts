@@ -144,13 +144,20 @@ const COMPONENT_CSS = `
   flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 8px 10px; border-radius: var(--radius);
   background: var(--subcard); color: var(--zinc-300);
+  box-shadow: inset 0 0 0 1px var(--hairline);   /* arête discrète = signature des panneaux (opacité, pas de bordure dure) */
   cursor: pointer; font-size: 12.5px; font-weight: 500; font-family: var(--font-sans);
-  transition: background var(--t-fast) var(--ease-expo), transform var(--t-fast) var(--ease-expo);
+  transition: background var(--t-fast) var(--ease-expo),
+              box-shadow var(--t-fast) var(--ease-expo),
+              color var(--t-fast) var(--ease-expo),
+              transform var(--t-fast) var(--ease-expo);
 }
-.ml-act:hover { background: var(--subcard-hover); transform: translateY(-2px); }
-.ml-act-primary { background: rgba(59,130,246,0.14); color: #93c5fd; }
-.ml-act-primary:hover { background: rgba(59,130,246,0.2); }
+.ml-act:hover { background: var(--subcard-hover); box-shadow: inset 0 0 0 1px var(--divider); transform: translateY(-2px); }
+.ml-act:active { transform: translateY(0); }
+.ml-act:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.ml-act-primary { background: rgba(59,130,246,0.14); color: #93c5fd; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blue) 26%, transparent); }
+.ml-act-primary:hover { background: rgba(59,130,246,0.2); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blue) 40%, transparent); }
 .ml-act[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+.ml-act[aria-disabled="true"]:hover { transform: none; background: var(--subcard); box-shadow: inset 0 0 0 1px var(--hairline); }
 .ml-act-ok { color: var(--green); }
 
 /* Panneau Signaler (14 anomalies) */
