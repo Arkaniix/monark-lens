@@ -155,7 +155,12 @@ const COMPONENT_CSS = `
 
 /* Panneau Signaler (14 anomalies) */
 .ml-flag-prompt { color: var(--zinc-400); font-size: 12px; margin-bottom: 6px; }
-.ml-flag-list { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+/* (Wave 1) La liste (~17 entrées : 16 familles + « other ») s'étend vers le bas au lieu de scroller
+   dans 260px. Plafond GÉNÉREUX relatif au viewport (pas de retrait total) : le host est
+   position:fixed;top:80px et l'overlay n'a pas de scroll interne (overflow:hidden) → une liste
+   illimitée pousserait le bouton « Retour » hors écran sur un viewport court. Ici la liste complète
+   est visible sur écran normal ; scroll interne seulement en dernier recours (viewport très bas). */
+.ml-flag-list { max-height: calc(100vh - 220px); overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .ml-flag-opt {
   display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 8px;
   background: var(--subcard); color: var(--zinc-300); cursor: pointer; font-size: 12.5px;
