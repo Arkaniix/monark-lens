@@ -18,6 +18,7 @@ import { bundleBodyHtml } from "./bundle-panel";
 import { cacheDecision } from "../decision-cache";
 import { getCompiledRules } from "../intent-rules-client";
 import { CONTENT_VERSION } from "../version";
+import { FEATURES } from "../features";
 import type { SnapshotResponse } from "../../lib/api-types";
 import type {
   AddWatchlistMsg,
@@ -718,6 +719,31 @@ function showFilteredView(): void {
   $('[data-act="estimate"]')?.addEventListener("click", onEstimate);
 }
 
+// (Wave 1) Estimation de lot DÉSACTIVÉE par flag (FEATURES.bundleEstimation=false) : au lieu
+// d'appeler onBundle(), on rend un message de dégradation honnête qui renvoie vers l'estimateur
+// (page NUE, sans pré-remplissage — un lot n'a pas de composant unique à passer en deep-link).
+// Tout le flow d'analyse (onBundle/requestBundle/bundle-panel) reste EN PLACE, juste non atteint.
+function renderBundleUnavailableView(ctx: ListingContext): string {
+  return (
+    `<div class="ml-overlay">` +
+    headerHtml() +
+    contextHtml(ctx, null) +
+    `<div class="ml-note"><span class="ml-note-title">Estimation de lot indisponible</span>` +
+    `L'estimation des lots et PC complets n'est pas encore disponible. Estime chaque composant un par un dans l'estimateur.</div>` +
+    `<div class="ml-actions"><button class="ml-act ml-act-primary" data-act="open-estimator">` +
+    `${icon("bar-chart")} Ouvrir l'estimateur</button></div>` +
+    footerHtml() +
+    `</div>`
+  );
+}
+
+function showBundleUnavailableView(): void {
+  if (!ctxRef) return;
+  setView(renderBundleUnavailableView(ctxRef));
+  // Estimateur NU (aucun pré-remplissage) — route /estimator connue via deeplink.ts + helper openWeb.
+  $('[data-act="open-estimator"]')?.addEventListener("click", () => openWeb("/estimator"));
+}
+
 async function onConfirmYes(): Promise<void> {
   if (!ctxRef) return;
   const ctx = ctxRef;
@@ -727,7 +753,13 @@ async function onConfirmYes(): Promise<void> {
   // (Phase B) un LOT/PC confirmé → on l'ANALYSE par composant (au lieu de la vue filtrée morte).
   // Les autres intents `confirm` (wanted/trade/broken/multiple/…) gardent la vue filtrée.
   if (ctx.intent.intent === "bundle") {
-    await onBundle();
+    // (Wave 1) Flag OFF → message de dégradation (renvoi estimateur) au lieu du flow d'analyse.
+    // Rallumage = FEATURES.bundleEstimation → true (src/content/features.ts) : comportement d'origine.
+    if (FEATURES.bundleEstimation) {
+      await onBundle();
+    } else {
+      showBundleUnavailableView();
+    }
     return;
   }
   showFilteredView();
