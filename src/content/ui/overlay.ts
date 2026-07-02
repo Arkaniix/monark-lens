@@ -677,7 +677,7 @@ function renderConfirmView(ctx: ListingContext): string {
   // au lieu d'une simple confirmation menant à une vue morte.
   const yesLabel =
     ctx.intent.intent === "bundle"
-      ? `${icon("layers")} Oui, analyser le lot →`
+      ? `${icon("layers")} Oui, c'est un PC / lot`
       : `✓ Oui, c'est bien « ${esc(label)} »`;
   return (
     `<div class="ml-overlay">` +
